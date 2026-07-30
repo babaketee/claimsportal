@@ -1,11 +1,11 @@
-"""Shared analytics charts â live from main.claims.fnol_submissions.
+"""Shared analytics charts Ã¢ÂÂ live from main.claims.fnol_submissions.
 
 Provides four cached data loaders and `render_analytics()` which renders
-a 2Ã2 Plotly chart grid:
-  â¢ Claims by Type (bar)
-  â¢ Status Distribution (donut)
-  â¢ Settlement Trend â monthly (line)
-  â¢ Avg Claim Age by Type (horizontal bar)
+a 2ÃÂ2 Plotly chart grid:
+  Ã¢ÂÂ¢ Claims by Type (bar)
+  Ã¢ÂÂ¢ Status Distribution (donut)
+  Ã¢ÂÂ¢ Settlement Trend Ã¢ÂÂ monthly (line)
+  Ã¢ÂÂ¢ Avg Claim Age by Type (horizontal bar)
 
 Usage in any view module:
     from views.analytics_charts import render_analytics
@@ -32,10 +32,8 @@ _FNOL         = "main.claims.fnol_submissions"
 def _run_sql(sql: str) -> pd.DataFrame:
     """Execute SQL against the configured warehouse; returns empty DataFrame on error."""
     try:
-        w = WorkspaceClient()
-        resp = w.statement_execution.execute_statement(
-            warehouse_id=_WAREHOUSE_ID,
-            statement=sql,
+                resp = w.statement_execution.execute_statement(
+            warehouse_id=            statement=sql,
             wait_timeout="30s",
         )
         if resp.status.state != StatementState.SUCCEEDED:
@@ -110,7 +108,7 @@ def _load_avg_cycle_time() -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def clear_cache() -> None:
-    """Invalidate all analytics caches â call before st.rerun()."""
+    """Invalidate all analytics caches Ã¢ÂÂ call before st.rerun()."""
     _load_claims_by_type.clear()      # type: ignore[attr-defined]
     _load_status_distribution.clear() # type: ignore[attr-defined]
     _load_settlement_trend.clear()    # type: ignore[attr-defined]
@@ -122,18 +120,18 @@ def clear_cache() -> None:
 # ---------------------------------------------------------------------------
 
 def render_analytics(show_refresh: bool = False) -> None:
-    """Render four live analytics charts in a 2Ã2 Plotly grid.
+    """Render four live analytics charts in a 2ÃÂ2 Plotly grid.
 
     Args:
         show_refresh: When True, displays a Refresh button that clears
                       all caches and reruns the page.
     """
     if show_refresh:
-        if st.button("ð Refresh Analytics", help="Re-query Delta tables"):
+        if st.button("Ã°ÂÂÂ Refresh Analytics", help="Re-query Delta tables"):
             clear_cache()
             st.rerun()
 
-    with st.spinner("Loading analytics from Deltaâ¦"):
+    with st.spinner("Loading analytics from DeltaÃ¢ÂÂ¦"):
         type_df   = _load_claims_by_type()
         status_df = _load_status_distribution()
         trend_df  = _load_settlement_trend()
