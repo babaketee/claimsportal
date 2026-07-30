@@ -3,6 +3,9 @@ from __future__ import annotations
 import datetime
 import streamlit as st
 
+import core_api
+import pandas as pd
+
 FINANCE_HEAD_LIMIT = 5_000_000  # KES — above this needs Board / Management resolution
 ROLE_LABELS = {"finance":"Finance / Accounts Payable","finance_head":"Finance Head"}
 
@@ -42,39 +45,97 @@ def _payment_queue() -> None:
     c1.metric("Items in Queue","4"); c2.metric("Total Payable (KES)","1,499,500"); c3.metric("High Priority","2")
 
 
-def _process_payment() -> None:
+def _process_payment(settlement_id: str, claim_ref: str) -> None:
+    """Mark a settlement as paid. Finance role only."""
     st.subheader("Process Payment")
-    st.warning("Only process payments listed in the Payment Queue. Retain the bank confirmation slip on file.")
-    with st.form("process_payment"):
-        c1, c2 = st.columns(2)
-        claim_ref    = c1.text_input("Claim Reference *")
-        payment_type = c2.selectbox("Payment Type *", [
-            "Client Settlement — EFT","Client Settlement — RTGS",
-            "Garage / Repairer — EFT","Assessor Fee — EFT","Investigator Fee — EFT","Third-Party Settlement",
-        ])
-        st.markdown("**Payee & Banking Details**")
-        c1, c2 = st.columns(2)
-        payee_name = c1.text_input("Payee Name *")
-        bank_name  = c2.text_input("Bank *")
-        c1, c2, c3 = st.columns(3)
-        account_no = c1.text_input("Account Number *"); c2.text_input("Branch Code"); c3.text_input("KRA PIN / ID")
-        st.markdown("**Payment Amount**")
-        c1, c2, c3 = st.columns(3)
-        c1.number_input("Gross (KES) *", min_value=0.0, format="%.2f")
-        c2.number_input("WHT (KES)", min_value=0.0, format="%.2f", help="5% on assessors/garages where applicable")
-        net_payment = c3.number_input("Net Payment (KES) *", min_value=0.0, format="%.2f")
-        c1, c2 = st.columns(2)
-        payment_ref  = c1.text_input("Internal Payment Ref *")
-        c2.date_input("Payment Date *", value=datetime.date.today())
-        slip     = st.file_uploader("Bank Slip / Confirmation *", type=["pdf","jpg","png"])
-        st.text_area("Finance Notes")
-        submitted = st.form_submit_button("Record Payment & Update Claim Status", type="primary", use_container_width=True)
-    if submitted:
-        if not all([claim_ref, payee_name, bank_name, account_no, payment_ref, slip]):
-            st.error("All starred fields and the payment slip are required.")
+    
+    # Get settlement details
+    settlements = core_api.get_settlements(claim_ref)
+    settlement = None
+    if not settlements.empty:
+        settlement = settlements[settlements['settlement_id'] == settlement_id]
+        if settlement.empty:
+            settlement = None
         else:
-            st.success(f"Payment of **KES {net_payment:,.2f}** to **{payee_name}** recorded. Claim **{claim_ref}** status updated. Payee notified.")
-            st.balloons()
+            settlement = settlement.iloc[0]
+    
+    if settlement is None:
+        st.error("Settlement not found.")
+        return
+    
+    col1, col2, col3 = st.columns(3)
+    with col1: st.metric("Settlement ID", settlement_id)
+    with col2: st.metric("Gross Amount", f"KES {settlement['amount']:,.0f}")
+    with col3: st.metric("Net Payable", f"KES {settlement['net_amount']:,.0f}")
+    
+    st.markdown(f"**Payee:** {settlement['payee_name']} ({settlement['payee_type']})")
+    if settlement.get('wht_amount', 0) > 0:
+        st.markdown(f"**WHT:** {settlement['wht_rate']*100:.0f}% = KES {settlement['wht_amount']:,.0f}")
+    st.markdown(f"**Status:** {settlement['status']}")
+    
+    if settlement['status'] == 'paid':
+        st.success(f"✅ Already paid — bank ref: {settlement.get('bank_ref', 'N/A')}")
+        return
+    
+    if settlement['status'] != 'approved':
+        st.warning(f"Cannot pay — settlement status is '{settlement['status']}', must be 'approved' first.")
+        return
+    
+    with st.form(key=f"pay_form_{settlement_id}"):
+        bank_ref = st.text_input("Bank Transfer Reference", key=f"bank_ref_{settlement_id}", placeholder="e.g. EFT-2025-07-15-001")
+        submitted = st.form_submit_button("Confirm Payment")
+        if submitted:
+            if not bank_ref.strip():
+                st.error("Bank reference is required.")
+                return
+            ok = core_api.mark_settlement_paid(settlement_id, bank_ref.strip())
+            if ok:
+                st.success(f"✅ Payment confirmed — {settlement_id}")
+                # Log communication
+                core_api.log_communication(
+                    claim_ref=claim_ref,
+                    channel="sms",
+                    direction="outbound",
+                    summary=f"Payment processed: KES {settlement['net_amount']:,.0f} to {settlement['payee_name']}",
+                    created_by=st.session_state.get("user", ""),
+                    contact_phone=""
+                )
+            else:
+                st.error("Failed to record payment.")
+
+
+def _payment_dashboard() -> None:
+    """Show all settlements pending or approved for payment."""
+    st.subheader("Payment Dashboard")
+    
+    # Show settlements needing payment (approved status)
+    conn = core_api._get_conn()
+    df = pd.read_sql(
+        "SELECT s.*, 'STL-' || substr(s.settlement_id,1,10) as short_id FROM settlements s WHERE s.status IN ('approved', 'pending') ORDER BY s.recommended_at DESC",
+        conn
+    )
+    conn.close()
+    
+    if df.empty:
+        st.info("No settlements awaiting payment.")
+        return
+    
+    st.markdown(f"**{len(df)} settlement(s) awaiting payment**")
+    for _, row in df.iterrows():
+        with st.expander(f"**{row['claim_ref']}** — {row['payee_name']} — KES {row['amount']:,.0f} — {row['status']}"):
+            col1, col2, col3 = st.columns(3)
+            with col1: st.metric("Gross", f"KES {row['amount']:,.0f}")
+            with col2: st.metric("WHT", f"KES {row.get('wht_amount', 0):,.0f}")
+            with col3: st.metric("Net", f"KES {row.get('net_amount', 0):,.0f}")
+            st.markdown(f"**Payee:** {row['payee_name']} ({row['payee_type']})")
+            st.markdown(f"**Recommended by:** {row['recommended_by']} on {row['recommended_at']}")
+            if row['status'] == 'approved':
+                if st.button(f"Process Payment: {row['settlement_id']}", key=f"pay_{row['settlement_id']}"):
+                    st.session_state['process_settlement_id'] = row['settlement_id']
+                    st.session_state['process_claim_ref'] = row['claim_ref']
+                    st.rerun()
+            else:
+                st.info("Awaiting HoC approval before payment can be processed.")
 
 
 def _update_payment_status() -> None:
@@ -183,3 +244,9 @@ def _financial_reports() -> None:
     period = c2.selectbox("Period", ["July 2025","June 2025","Q2 2025 (Apr-Jun)","YTD 2025"])
     if st.button("Generate Report", type="primary", use_container_width=True):
         st.info(f"Generating **{report}** for **{period}** … Connect Delta tables for live output.")
+
+def show() -> None:
+    if 'process_settlement_id' in st.session_state:
+        _process_payment(st.session_state['process_settlement_id'], st.session_state['process_claim_ref'])
+    else:
+        _payment_dashboard()
