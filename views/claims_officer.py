@@ -1,4 +1,4 @@
-"""Claims Handler / Claims Officer Portal — core claims processing."""
+"""Claims Handler / Claims Officer Portal â core claims processing."""
 from __future__ import annotations
 import datetime
 import streamlit as st
@@ -6,14 +6,14 @@ import pandas as pd
 
 from core_api import core_api
 
-OFFICER_AUTHORITY_LIMIT = 500_000  # KES — above this needs Head of Claims sign-off
+OFFICER_AUTHORITY_LIMIT = 500_000  # KES â above this needs Head of Claims sign-off
 
 
 def render() -> None:
-    st.title("📋 Claims Officer Portal")
+    st.title("ð Claims Officer Portal")
     tabs = st.tabs([
-        "📥 My Claims", "👥 Assign Experts", "💼 Reserve",
-        "✅ Settlement", "💸 Authorise Payment", "📨 Correspondence", "🏷️ Bid Comparison"
+        "ð¥ My Claims", "ð¥ Assign Experts", "ð¼ Reserve",
+        "â Settlement", "ð¸ Authorise Payment", "ð¨ Correspondence", "ð·ï¸ Bid Comparison"
     ])
     with tabs[0]:
         _my_claims()
@@ -49,7 +49,7 @@ def _my_claims() -> None:
 
 
 def _assign_experts_tab() -> None:
-    st.subheader("My Claims — Assign Expert")
+    st.subheader("My Claims â Assign Expert")
     claims = [
         {"Ref": "CLM-20250715123456", "Client": "John Mwangi"},
         {"Ref": "CLM-20250714098765", "Client": "Amina Wanjiru"},
@@ -94,7 +94,7 @@ def _assign_experts(claim_ref: str) -> None:
                 note=note.strip()
             )
             if assignment_id:
-                st.success(f"✅ Expert assigned — {assignment_id}")
+                st.success(f"â Expert assigned â {assignment_id}")
                 core_api.log_communication(
                     claim_ref=claim_ref,
                     channel="sms",
@@ -104,7 +104,7 @@ def _assign_experts(claim_ref: str) -> None:
                     contact_phone=expert_phone.strip()
                 )
                 if expert_phone.strip():
-                    st.info(f"📱 SMS notification would be sent to {expert_phone.strip()}")
+                    st.info(f"ð± SMS notification would be sent to {expert_phone.strip()}")
             else:
                 st.error("Failed to assign expert. Please try again.")
 
@@ -184,7 +184,7 @@ def _set_reserve(claim_ref: str) -> None:
                 note=note.strip()
             )
             if reserve_id:
-                st.success(f"✅ Reserve created — {reserve_id}")
+                st.success(f"â Reserve created â {reserve_id}")
             else:
                 st.error("Failed to create reserve.")
 
@@ -279,7 +279,7 @@ def _recommend_settlement(claim_ref: str) -> None:
                 note=note.strip()
             )
             if settlement_id:
-                st.success(f"✅ Settlement recommended — {settlement_id} — sent to Head of Claims for approval")
+                st.success(f"â Settlement recommended â {settlement_id} â sent to Head of Claims for approval")
             else:
                 st.error("Failed to submit settlement recommendation.")
 
@@ -309,7 +309,7 @@ def _authorise_service_payment(claim_ref: str) -> None:
         )
         decision = c3.selectbox(
             "Decision *",
-            ["Approve for Payment", "Reject — Return Invoice", "Query — Request Clarification"],
+            ["Approve for Payment", "Reject â Return Invoice", "Query â Request Clarification"],
             key=f"ap_dec_{claim_ref}"
         )
         st.text_area("Authorisation Notes", key=f"ap_notes_{claim_ref}")
@@ -330,18 +330,18 @@ def _authorise_service_payment(claim_ref: str) -> None:
                 note=""
             )
             if auth_id:
-                st.success(f"✅ Payment of **KES {invoice_amount:,.2f}** to **{provider_name}** authorised. Finance notified. ({auth_id})")
+                st.success(f"â Payment of **KES {invoice_amount:,.2f}** to **{provider_name}** authorised. Finance notified. ({auth_id})")
             else:
                 st.error("Failed to authorise payment.")
         else:
-            st.info(f"Invoice for **{claim_ref}** — **{decision}** recorded. Provider notified.")
+            st.info(f"Invoice for **{claim_ref}** â **{decision}** recorded. Provider notified.")
 
 
 def _correspondence(claim_ref: str) -> None:
     """Log communications and manage diary entries."""
     st.subheader("Correspondence & Diary")
 
-    tab_comm, tab_diary = st.tabs(["📞 Communications Log", "📋 Diary"])
+    tab_comm, tab_diary = st.tabs(["ð Communications Log", "ð Diary"])
 
     with tab_comm:
         st.markdown("**Log Communication**")
@@ -370,7 +370,7 @@ def _correspondence(claim_ref: str) -> None:
                     consent=consent
                 )
                 if comm_id:
-                    st.success(f"✅ Communication logged — {comm_id}")
+                    st.success(f"â Communication logged â {comm_id}")
                 else:
                     st.error("Failed to log communication.")
 
@@ -407,7 +407,7 @@ def _correspondence(claim_ref: str) -> None:
                     note=note.strip()
                 )
                 if entry_id:
-                    st.success(f"✅ Diary entry added — {entry_id}")
+                    st.success(f"â Diary entry added â {entry_id}")
                 else:
                     st.error("Failed to add diary entry.")
 
@@ -418,7 +418,7 @@ def _correspondence(claim_ref: str) -> None:
             overdue_df = diary_df[(diary_df["status"] == "open") & (diary_df["due_date"] < today)]
             if not overdue_df.empty:
                 suffix = "y" if len(overdue_df) == 1 else "ies"
-                st.error(f"⚠️ {len(overdue_df)} overdue entr{suffix}")
+                st.error(f"â ï¸ {len(overdue_df)} overdue entr{suffix}")
             st.dataframe(
                 diary_df[["entry_id", "task", "due_date", "assigned_to", "priority", "status"]],
                 use_container_width=True
@@ -450,12 +450,12 @@ def _score_bids(bids: list) -> list:
     bids.sort(key=lambda x: x["composite"], reverse=True)
     for i, b in enumerate(bids):
         b["rank"]        = i + 1
-        b["recommended"] = "⭐ Recommended" if i == 0 else ""
+        b["recommended"] = "â­ Recommended" if i == 0 else ""
     return bids
 
 
 # ---------------------------------------------------------------------------
-# Bid Comparison — evaluate and award spare parts RFQs
+# Bid Comparison â evaluate and award spare parts RFQs
 # ---------------------------------------------------------------------------
 
 def _bid_comparison() -> None:
@@ -488,13 +488,13 @@ def _bid_comparison() -> None:
     c1, c2 = st.columns([3, 1])
     rfq_ref = c1.selectbox(
         "Select RFQ Reference",
-        options=["— select an RFQ —"] + open_rfqs,
+        options=["â select an RFQ â"] + open_rfqs,
         key="bid_comp_rfq",
     )
-    if c2.button("🔄 Refresh", key="bid_comp_refresh", use_container_width=True):
+    if c2.button("ð Refresh", key="bid_comp_refresh", use_container_width=True):
         st.rerun()
 
-    if rfq_ref.startswith("—"):
+    if rfq_ref.startswith("â"):
         st.caption("Select an RFQ reference above to load submitted bids.")
         return
 
@@ -512,7 +512,7 @@ def _bid_comparison() -> None:
     mc3.metric("Highest Price (KES)", f"{max(prices):,.2f}")
     mc4.metric("Best Score", bids[0]["composite"])
 
-    st.markdown(f"**{len(bids)} bid(s) for {rfq_ref}** — sorted by composite score (highest first)")
+    st.markdown(f"**{len(bids)} bid(s) for {rfq_ref}** â sorted by composite score (highest first)")
     df = pd.DataFrame([{
         "Rank":             b["rank"],
         "Recommendation":   b["recommended"],
@@ -531,7 +531,7 @@ def _bid_comparison() -> None:
     } for b in bids])
     st.dataframe(df, use_container_width=True, hide_index=True)
 
-    with st.expander("📊 Score Breakdown Chart"):
+    with st.expander("ð Score Breakdown Chart"):
         st.caption("Price Score (60 %) and Rating Score (40 %) per provider.")
         chart_df = pd.DataFrame({
             "Provider":             [b["provider"]      for b in bids],
@@ -548,7 +548,7 @@ def _bid_comparison() -> None:
     )
 
     bid_labels = [
-        f"{b['bid_ref']} — {b['provider']}  | KES {b['unit_price']:,.2f} | {b['lead_days']}d | Score {b['composite']}"
+        f"{b['bid_ref']} â {b['provider']}  | KES {b['unit_price']:,.2f} | {b['lead_days']}d | Score {b['composite']}"
         for b in bids
     ]
 
@@ -563,7 +563,7 @@ def _bid_comparison() -> None:
 
         if is_override:
             st.warning(
-                f"⚠️ Override: **{bids[0]['bid_ref']}** ({bids[0]['provider']}, Score {bids[0]['composite']}) "
+                f"â ï¸ Override: **{bids[0]['bid_ref']}** ({bids[0]['provider']}, Score {bids[0]['composite']}) "
                 "is the system recommendation. Provide justification below."
             )
 
@@ -581,7 +581,7 @@ def _bid_comparison() -> None:
             placeholder="e.g. Parts must arrive before repair starts. State override reason if applicable.",
         )
         award_btn = st.form_submit_button(
-            "🏆 Award Bid & Notify All Providers", type="primary", use_container_width=True
+            "ð Award Bid & Notify All Providers", type="primary", use_container_width=True
         )
 
     if award_btn:
@@ -596,13 +596,13 @@ def _bid_comparison() -> None:
                 st.warning(f"Override logged: {winner['bid_ref']} (Rank {winner['rank']}) selected over recommendation.")
 
             st.success(
-                f"**Contract Awarded — {winner['provider']}** ({winner['bid_ref']})  
+                f"**Contract Awarded - {winner['provider']}** ({winner['bid_ref']})"
 "
-                f"Unit Price: **KES {winner['unit_price']:,.2f}** · "
-                f"Lead time: **{winner['lead_days']} days** · "
-                f"Warranty: **{winner['warranty']}** · Score: **{winner['composite']}**  
+                f"Unit Price: **KES {winner['unit_price']:,.2f}** Â· "
+                f"Lead time: **{winner['lead_days']} days** Â· "
+                f"Warranty: **{winner['warranty']}** Â· Score: **{winner['composite']}**  
 "
-                f"Order: **{order_ref}** · Payer: **{payer.split(' (')[0]}**  
+                f"Order: **{order_ref}** Â· Payer: **{payer.split(' (')[0]}**  
 "
                 f"Delivery: {delivery_address}  
 "
