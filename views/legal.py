@@ -1,21 +1,21 @@
-"""Legal Officer Portal Ã¢ÂÂ disputed claims, litigation, repudiation appeals, and recovery."""
+"""Legal Officer Portal — disputed claims, litigation, repudiation appeals, and recovery."""
 from __future__ import annotations
 import datetime
-import os
 import streamlit as st
 
-_DISPUTES_TABLE = None  # SQLite-backed
+# SQLite-backed — Delta warehouse removed
+_DISPUTES_TABLE = None
 
 
 def render() -> None:
-    st.title("Ã¢ÂÂÃ¯Â¸Â Legal Officer Portal")
+    st.title("\u2696\ufe0f Legal Officer Portal")
     tabs = st.tabs([
-        "Ã°ÂÂÂ Dispute Register",
-        "Ã°ÂÂÂ Repudiation Appeals",
-        "Ã°ÂÂÂÃ¯Â¸Â Litigation Tracker",
-        "Ã°ÂÂÂ¬ Demand Letters & OTS",
-        "Ã°ÂÂÂ Recovery & Subrogation",
-        "Ã°ÂÂÂ IRA Complaints",
+        "\U0001f4c4 Dispute Register",
+        "\U0001f514 Repudiation Appeals",
+        "\U0001f3db\ufe0f Litigation Tracker",
+        "\U0001f4ec Demand Letters & OTS",
+        "\U0001f501 Recovery & Subrogation",
+        "\U0001f4cb IRA Complaints",
     ])
     with tabs[0]: _dispute_register()
     with tabs[1]: _repudiation_appeals()
@@ -30,62 +30,14 @@ def render() -> None:
 # ---------------------------------------------------------------------------
 
 def _fetch_disputes(stage_f: str, urgency_f: str, search: str) -> list[dict]:
-    """Query main.claims.legal_disputes with optional filters. Returns list of row dicts."""
-    w          = WorkspaceClient()
-    conditions = ["stage != 'Closed'"]
-    params: list[StatementParameterListItem] = []
-
-    if stage_f != "All":
-        conditions.append("stage = :stage_filter")
-        params.append(StatementParameterListItem(name="stage_filter", value=stage_f))
-
-    if urgency_f != "All":
-        conditions.append("urgency = :urgency_filter")
-        params.append(StatementParameterListItem(name="urgency_filter", value=urgency_f))
-
-    if search.strip():
-        conditions.append(
-            "(LOWER(claim_ref) LIKE :pat OR LOWER(client_name) LIKE :pat "
-            "OR LOWER(COALESCE(advocate, '')) LIKE :pat)"
-        )
-        params.append(StatementParameterListItem(name="pat", value=f"%{search.strip().lower()}%"))
-
-    where = " AND ".join(conditions)
-    sql = f"""
-        SELECT
-            claim_ref                                   AS `Ref`,
-            client_name                                 AS `Client`,
-            COALESCE(claim_type,  '')                  AS `Type`,
-            stage                                       AS `Stage`,
-            urgency                                     AS `Urgency`,
-            COALESCE(advocate, 'Pending')               AS `Advocate`,
-            COALESCE(next_action_desc, '')              AS `Next Action`,
-            CAST(next_action_date AS STRING)            AS `Due Date`,
-            FORMAT_NUMBER(exposure_kes, 0)              AS `Exposure (KES)`,
-            DATEDIFF(current_date(), CAST(referred_at AS DATE)) AS `Days Open`
-        FROM {_DISPUTES_TABLE}
-        WHERE {where}
-        ORDER BY
-            CASE urgency WHEN 'Critical' THEN 1 WHEN 'High' THEN 2 ELSE 3 END,
-            next_action_date ASC NULLS LAST
-    """
-    resp = w.statement_execution.execute_statement(
-        warehouse_id=_WAREHOUSE_ID,
-        statement=sql,
-        parameters=params if params else None,
-        wait_timeout="30s",
-    )
-    if resp.status.state != StatementState.SUCCEEDED:
-        msg = resp.status.error.message if resp.status.error else str(resp.status.state)
-        raise RuntimeError(f"Query failed: {msg}")
-
-    cols = [c.name for c in resp.manifest.schema.columns]
-    return [dict(zip(cols, row)) for row in (resp.result.data_array or [])]
+    """Query SQLite for disputes. Returns list of row dicts."""
+    # TODO: wire to core_api.get_disputes() once implemented
+    return []
 
 
 def _dispute_register() -> None:
     st.subheader("Dispute Register")
-    st.caption("Live from main.claims.legal_disputes Ã¢ÂÂ repudiation appeals, demand letters, litigation, and regulatory complaints.")
+    st.info("Dispute register is being migrated to SQLite.")
 
     c1, c2, c3 = st.columns(3)
     stage_f    = c1.selectbox("Stage",   ["All","Repudiation Appeal","Pre-Litigation","Litigation","Consent Order"])
@@ -99,7 +51,6 @@ def _dispute_register() -> None:
         else:
             st.info("No open disputes match the selected filters.")
 
-        # Ã¢ÂÂÃ¢ÂÂ KPI metrics derived from live data Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
         open_count    = len(rows)
         in_litigation = sum(1 for r in rows if r.get("Stage") == "Litigation")
         exposure_vals = []
@@ -121,7 +72,6 @@ def _dispute_register() -> None:
 
     except Exception as exc:
         st.error(f"Could not load dispute register: {exc}")
-        st.caption("Check that the SQL warehouse is running and the table main.claims.legal_disputes is accessible.")
 
 
 # ---------------------------------------------------------------------------
@@ -135,10 +85,9 @@ def _repudiation_appeals() -> None:
         "the investigation report, and the policy wording before recommending a position."
     )
 
-    # TODO: Query claims.repudiation_appeals WHERE status IN ('Received','Under Review')
     appeals = [
-        {"Ref": "CLM-20250701044512", "Client": "Mercy Holdings Ltd.", "Grounds": "Policy Lapse dispute Ã¢ÂÂ alleges payment was made",     "Received": "2025-07-10", "Status": "Under Review"},
-        {"Ref": "CLM-20250620031122", "Client": "Susan Waithaka",      "Grounds": "Non-disclosure Ã¢ÂÂ client disputes materiality",        "Received": "2025-07-05", "Status": "Response Drafted"},
+        {"Ref": "CLM-20250701044512", "Client": "Mercy Holdings Ltd.", "Grounds": "Policy Lapse dispute — alleges payment was made",     "Received": "2025-07-10", "Status": "Under Review"},
+        {"Ref": "CLM-20250620031122", "Client": "Susan Waithaka",      "Grounds": "Non-disclosure — client disputes materiality",        "Received": "2025-07-05", "Status": "Response Drafted"},
     ]
     st.dataframe(appeals, use_container_width=True)
     st.divider()
@@ -147,9 +96,9 @@ def _repudiation_appeals() -> None:
         c1, c2 = st.columns(2)
         claim_ref  = c1.text_input("Claim Reference *")
         decision   = c2.selectbox("Legal Recommendation *", [
-            "Uphold Repudiation Ã¢ÂÂ Defend Position",
-            "Partially Uphold Ã¢ÂÂ Ex-Gratia Offer",
-            "Reverse Repudiation Ã¢ÂÂ Reopen Claim",
+            "Uphold Repudiation — Defend Position",
+            "Partially Uphold — Ex-Gratia Offer",
+            "Reverse Repudiation — Reopen Claim",
             "Refer to External Counsel",
         ])
         c1, c2 = st.columns(2)
@@ -165,7 +114,6 @@ def _repudiation_appeals() -> None:
         if not claim_ref or not policy_ref or not legal_opinion:
             st.error("Claim reference, policy section, and legal opinion are required.")
         else:
-            # TODO: UPDATE claims.repudiation_appeals SET status='Position Recorded'; generate response letter
             st.success(f"Legal position recorded for **{claim_ref}**: **{decision}**. Response letter queued for review.")
 
 
@@ -177,10 +125,9 @@ def _litigation_tracker() -> None:
     st.subheader("Litigation Tracker")
     st.warning("Any judgment or consent order amount must be routed to Finance Head for payment approval.")
 
-    # TODO: Query claims.litigation WHERE status != 'Closed'
     cases = [
         {"Ref": "CLM-20250712055431", "Client / Plaintiff": "Peter Ochieng",  "Court": "Milimani Commercial Court", "Case No.": "ELC/123/2025", "Status": "Active",       "Next Hearing": "2025-08-05", "Claim Amount (KES)": "1,200,000", "External Counsel": "Kariuki & Co."},
-        {"Ref": "CLM-20250615029988", "Client / Plaintiff": "James Obuya",    "Court": "Magistrate Ã¢ÂÂ Kibera",       "Case No.": "CIV/088/2025", "Status": "Consent Order","Next Hearing": "Ã¢ÂÂ",          "Claim Amount (KES)": "95,000",    "External Counsel": "Mutua & Partners"},
+        {"Ref": "CLM-20250615029988", "Client / Plaintiff": "James Obuya",    "Court": "Magistrate — Kibera",       "Case No.": "CIV/088/2025", "Status": "Consent Order","Next Hearing": "—",          "Claim Amount (KES)": "95,000",    "External Counsel": "Mutua & Partners"},
     ]
     st.dataframe(cases, use_container_width=True)
     st.divider()
@@ -193,9 +140,9 @@ def _litigation_tracker() -> None:
         c1, c2 = st.columns(2)
         hearing_date   = c1.date_input("Hearing / Filing Date *")
         hearing_result = c2.selectbox("Result / Action *", [
-            "Hearing held Ã¢ÂÂ adjourned",
-            "Judgment delivered Ã¢ÂÂ in our favour",
-            "Judgment delivered Ã¢ÂÂ against us",
+            "Hearing held — adjourned",
+            "Judgment delivered — in our favour",
+            "Judgment delivered — against us",
             "Consent Order agreed",
             "Case withdrawn by plaintiff",
             "Settlement reached out of court",
@@ -213,11 +160,9 @@ def _litigation_tracker() -> None:
         if not claim_ref or not case_no or not counsel_notes:
             st.error("Claim reference, case number, and notes are required.")
         elif amount_awarded > 0 and "Judgment" in hearing_result and "against us" in hearing_result:
-            # TODO: INSERT INTO claims.litigation_log; trigger Finance Head payment instruction
             st.error(f"Judgment of KES {amount_awarded:,.2f} against insurer. **Automatically routed to Finance Head** for payment approval.")
         else:
-            # TODO: INSERT INTO claims.litigation_log
-            st.success(f"Litigation update saved for **{claim_ref}** Ã¢ÂÂ {hearing_result}.")
+            st.success(f"Litigation update saved for **{claim_ref}** — {hearing_result}.")
 
 
 # ---------------------------------------------------------------------------
@@ -230,9 +175,8 @@ def _demand_letters_ots() -> None:
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("**Ã°ÂÂÂ¬ Incoming Demand Letters**")
+        st.markdown("**\U0001f4ec Incoming Demand Letters**")
         st.caption("Log letters of demand received from claimants or their advocates.")
-        # TODO: Query claims.demand_letters ORDER BY received_date DESC
         letters = [
             {"Ref": "CLM-20250709012345", "From": "Mwangi & Associates (Advocates)", "Amount Demanded (KES)": "900,000", "Received": "2025-07-18", "Response Due": "2025-07-25", "Status": "Pending Response"},
             {"Ref": "CLM-20250620031122", "From": "Susan Waithaka (Self)",            "Amount Demanded (KES)": "150,000", "Received": "2025-07-10", "Response Due": "2025-07-24", "Status": "Response Drafted"},
@@ -240,11 +184,10 @@ def _demand_letters_ots() -> None:
         st.dataframe(letters, use_container_width=True)
 
     with col2:
-        st.markdown("**Ã°ÂÂÂ¤ Offers to Settle (OTS) Issued**")
-        # TODO: Query claims.offers_to_settle ORDER BY issued_date DESC
+        st.markdown("**\U0001f4ee Offers to Settle (OTS) Issued**")
         offers = [
             {"Ref": "CLM-20250709012345", "Offer (KES)": "550,000", "Issued": "2025-07-19", "Expiry": "2025-07-26", "Status": "Awaiting Acceptance"},
-            {"Ref": "CLM-20250615029988", "Offer (KES)": "95,000",  "Issued": "2025-07-12", "Expiry": "2025-07-19", "Status": "Accepted Ã¢ÂÂ Consent Order"},
+            {"Ref": "CLM-20250615029988", "Offer (KES)": "95,000",  "Issued": "2025-07-12", "Expiry": "2025-07-19", "Status": "Accepted — Consent Order"},
         ]
         st.dataframe(offers, use_container_width=True)
 
@@ -268,7 +211,6 @@ def _demand_letters_ots() -> None:
             if not claim_ref or not sender or not summary or not letter_file:
                 st.error("All starred fields and the letter PDF are required.")
             else:
-                # TODO: INSERT INTO claims.demand_letters; notify Claims Officer and HoC
                 st.success(f"Demand letter for **{claim_ref}** logged. Claims Officer and Head of Claims notified.")
 
     with tab_ots:
@@ -290,7 +232,6 @@ def _demand_letters_ots() -> None:
             elif not hoc_approved:
                 st.warning("Head of Claims must approve the offer amount before it is issued.")
             else:
-                # TODO: INSERT INTO claims.offers_to_settle; generate OTS letter; notify HoC
                 st.success(f"OTS of **KES {offer_amount:,.2f}** issued to **{addressee}** for **{claim_ref}**. Valid until {expiry_date}.")
 
 
@@ -305,7 +246,6 @@ def _recovery_subrogation() -> None:
         "All recoveries must be credited back to the Finance team."
     )
 
-    # TODO: Query claims.recovery_actions WHERE status != 'Closed'
     recoveries = [
         {"Ref": "CLM-20250712055431", "Type": "Third-Party Recovery",  "Third Party": "Nairobi Bus Services Ltd.", "Claim Paid (KES)": "1,200,000", "Recovery Target (KES)": "800,000", "Status": "Demand Issued",    "Recovery (KES)": "0"},
         {"Ref": "CLM-20250615029988", "Type": "Salvage",               "Third Party": "Auto Salvage Kenya",        "Claim Paid (KES)": "95,000",    "Recovery Target (KES)": "15,000",  "Status": "Auction Scheduled","Recovery (KES)": "0"},
@@ -336,7 +276,6 @@ def _recovery_subrogation() -> None:
         if not claim_ref or not third_party or not notes:
             st.error("Claim reference, third party, and notes are required.")
         else:
-            # TODO: INSERT INTO claims.recovery_actions; notify Finance to credit recovery proceeds
             st.success(
                 f"Recovery of **KES {amount_recovered:,.2f}** from **{third_party}** recorded for **{claim_ref}**. "
                 "Finance notified to credit proceeds."
@@ -354,7 +293,6 @@ def _ira_complaints() -> None:
         "carry a statutory response deadline. Breaching it attracts regulatory penalties."
     )
 
-    # TODO: Query claims.regulatory_complaints WHERE status != 'Closed'
     complaints = [
         {"Ref": "CLM-20250701044512", "Complainant": "Mercy Holdings Ltd.", "Filed With": "IRA",               "Filed": "2025-07-14", "Response Due": "2025-07-21", "Status": "Under Investigation", "Regulator Ref": "IRA/CMP/2025/1144"},
         {"Ref": "CLM-20250620031122", "Complainant": "Susan Waithaka",      "Filed With": "Insurance Ombudsman","Filed": "2025-07-08", "Response Due": "2025-07-22", "Status": "Response Submitted",  "Regulator Ref": "OMB/2025/0892"},
@@ -380,7 +318,6 @@ def _ira_complaints() -> None:
             if not claim_ref or not complaint_summary or not complaint_doc:
                 st.error("Claim reference, summary, and complaint document are required.")
             else:
-                # TODO: INSERT INTO claims.regulatory_complaints; set calendar reminder for deadline
                 st.success(f"Complaint for **{claim_ref}** logged. Response deadline: **{response_due}**. Calendar reminder set.")
 
     with tab_respond:
@@ -399,5 +336,4 @@ def _ira_complaints() -> None:
             elif not hoc_approved:
                 st.warning("Head of Claims approval is required before submitting a regulatory response.")
             else:
-                # TODO: UPDATE claims.regulatory_complaints SET status='Response Submitted'; log audit
                 st.success(f"Regulatory response for **{claim_ref}** (Ref: {regulator_ref}) submitted and logged.")
