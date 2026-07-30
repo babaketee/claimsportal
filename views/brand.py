@@ -1,12 +1,12 @@
-"""Brand identity module â Definite Assurance Co. Ltd.
+"""Brand identity module Ã¢ÂÂ Definite Assurance Co. Ltd.
 
 Injects CSS and provides branded Streamlit components aligned to the
 official Brand Identity Guidelines v0.1 (February 2025).
 
 Palette
 -------
-Aberdare Green  #0f4f48   primary â trust, growth, security
-Uhuru Red       #eb2229   primary â urgency, assurance tick
+Aberdare Green  #0f4f48   primary Ã¢ÂÂ trust, growth, security
+Uhuru Red       #eb2229   primary Ã¢ÂÂ urgency, assurance tick
 Solid Black     #000000
 Urban White     #ffffff
 
@@ -14,7 +14,7 @@ Typography
 ----------
 Primary : Gotham (clean, modern sans-serif)
 Fallback: Roboto (served via Google Fonts)
-Headlines   : Gotham Ultra / Roboto Black   â¥24 pt
+Headlines   : Gotham Ultra / Roboto Black   Ã¢ÂÂ¥24 pt
 Subheaders  : Gotham Bold  / Roboto Bold    16-24 pt
 Body        : Gotham Book  / Roboto Regular 12-16 pt
 """
@@ -41,27 +41,27 @@ RED_70   = "#f17075"   # Uhuru Red 70 % tint
 RED_10   = "#fce8e9"   # Uhuru Red 10 % tint
 
 # ---------------------------------------------------------------------------
-# Extended palette â tints for charts and data-vis
+# Extended palette Ã¢ÂÂ tints for charts and data-vis
 # ---------------------------------------------------------------------------
-# Ordered brand colorway (categorical charts â 8 stops)
+# Ordered brand colorway (categorical charts Ã¢ÂÂ 8 stops)
 DA_COLORWAY: list[str] = [
-    GREEN,       # Aberdare Green       â primary positive
-    RED,         # Uhuru Red            â primary accent / alert
-    GREEN_70,    # Green 70 %           â secondary positive
-    RED_70,      # Red 70 %             â secondary accent
-    GREEN_30,    # Green 30 %           â tertiary positive
-    "#1a8f87",   # Bright teal          â extra accent
-    "#c41e24",   # Darker red           â emphasis
-    GREEN_10,    # Green 10 %           â background tint
+    GREEN,       # Aberdare Green       Ã¢ÂÂ primary positive
+    RED,         # Uhuru Red            Ã¢ÂÂ primary accent / alert
+    GREEN_70,    # Green 70 %           Ã¢ÂÂ secondary positive
+    RED_70,      # Red 70 %             Ã¢ÂÂ secondary accent
+    GREEN_30,    # Green 30 %           Ã¢ÂÂ tertiary positive
+    "#1a8f87",   # Bright teal          Ã¢ÂÂ extra accent
+    "#c41e24",   # Darker red           Ã¢ÂÂ emphasis
+    GREEN_10,    # Green 10 %           Ã¢ÂÂ background tint
 ]
 
-# Sequential scale: Aberdare Green â neutral â Uhuru Red
+# Sequential scale: Aberdare Green Ã¢ÂÂ neutral Ã¢ÂÂ Uhuru Red
 # Low = good/fast (green), high = urgent/slow (red)
 DA_SCALE_GREEN_RED: list[list] = [
-    [0.00, GREEN],    # best â brand green
+    [0.00, GREEN],    # best Ã¢ÂÂ brand green
     [0.40, GREEN_30], # mid-low
     [0.70, RED_70],   # mid-high
-    [1.00, RED],      # worst â Uhuru Red
+    [1.00, RED],      # worst Ã¢ÂÂ Uhuru Red
 ]
 
 _FONT_FAMILY = "'Gotham', 'Roboto', 'Helvetica Neue', Arial, sans-serif"
@@ -139,7 +139,7 @@ def register_plotly_theme() -> None:
     pio.templates.default = "plotly_white+definite_assurance"
 
 
-# Auto-register on import â any module importing brand gets the theme for free
+# Auto-register on import Ã¢ÂÂ any module importing brand gets the theme for free
 register_plotly_theme()
 
 
@@ -150,13 +150,13 @@ register_plotly_theme()
 def _logo_html(size_px: int = 56, variant: str = "color") -> str:
     """Return self-contained HTML for the Definite Assurance wordmark.
 
-    Renders the stylised D-with-checkmark + âefiniteâ in Aberdare Green
-    and âASSURANCEâ in Uhuru Red below, matching the official logo mark.
+    Renders the stylised D-with-checkmark + Ã¢ÂÂefiniteÃ¢ÂÂ in Aberdare Green
+    and Ã¢ÂÂASSURANCEÃ¢ÂÂ in Uhuru Red below, matching the official logo mark.
 
     Args:
-        size_px : Cap-height in px for the âDefiniteâ wordmark.
-        variant : âcolorâ for the full-colour version;
-                  âwhiteâ for all-white on dark/green backgrounds.
+        size_px : Cap-height in px for the Ã¢ÂÂDefiniteÃ¢ÂÂ wordmark.
+        variant : Ã¢ÂÂcolorÃ¢ÂÂ for the full-colour version;
+                  Ã¢ÂÂwhiteÃ¢ÂÂ for all-white on dark/green backgrounds.
     """
     if variant == "white":
         word_col   = "#ffffff"
@@ -176,7 +176,7 @@ def _logo_html(size_px: int = 56, variant: str = "color") -> str:
     return (
         f'<div style="display:inline-flex;flex-direction:column;line-height:1;'
         f'font-family:\'Gotham\',\'Roboto\',\'Arial Black\',Arial,sans-serif;">'
-        # â Row 1: Dâ + efinite â
+        # Ã¢ÂÂ Row 1: DÃ¢ÂÂ + efinite Ã¢ÂÂ
         f'<div style="display:inline-flex;align-items:baseline;line-height:0.95;">'
         # D with red checkmark overlay
         f'<div style="position:relative;display:inline-block;line-height:1;">'
@@ -190,7 +190,7 @@ def _logo_html(size_px: int = 56, variant: str = "color") -> str:
         f'<span style="font-size:{size_px}px;font-weight:900;color:{word_col};'
         f'line-height:1;margin-left:-1px;">efinite</span>'
         f'</div>'
-        # â Row 2: ASSURANCE â
+        # Ã¢ÂÂ Row 2: ASSURANCE Ã¢ÂÂ
         f'<div style="font-size:{assure_px}px;font-weight:700;color:{assure_col};'
         f'letter-spacing:0.38em;margin-top:{gap_top}px;padding-left:2px;">'
         f'ASSURANCE</div>'
@@ -203,15 +203,15 @@ def _logo_html(size_px: int = 56, variant: str = "color") -> str:
 # ---------------------------------------------------------------------------
 _CSS = f"""
 <style>
-/* ââ Google Fonts: Roboto (Gotham system fallback) ââ */
+/* Ã¢ÂÂÃ¢ÂÂ Google Fonts: Roboto (Gotham system fallback) Ã¢ÂÂÃ¢ÂÂ */
 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap');
 
-/* ââ Global font ââ */
+/* Ã¢ÂÂÃ¢ÂÂ Global font Ã¢ÂÂÃ¢ÂÂ */
 html, body, [class*="css"] {{
   font-family: 'Gotham', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
 }}
 
-/* ââ Sidebar â Aberdare Green background ââ */
+/* Ã¢ÂÂÃ¢ÂÂ Sidebar Ã¢ÂÂ Aberdare Green background Ã¢ÂÂÃ¢ÂÂ */
 section[data-testid="stSidebar"] {{
   background-color: {GREEN} !important;
 }}
@@ -234,7 +234,7 @@ section[data-testid="stSidebar"] .stButton > button:hover {{
   box-shadow: 0 2px 8px rgba(0,0,0,0.25);
 }}
 
-/* ââ Primary action buttons â Uhuru Red ââ */
+/* Ã¢ÂÂÃ¢ÂÂ Primary action buttons Ã¢ÂÂ Uhuru Red Ã¢ÂÂÃ¢ÂÂ */
 .stButton > button[kind="primary"] {{
   background-color: {RED} !important;
   color: {WHITE} !important;
@@ -247,7 +247,7 @@ section[data-testid="stSidebar"] .stButton > button:hover {{
   box-shadow: 0 2px 6px rgba(235,34,41,0.35);
 }}
 
-/* ââ Form submit button (also primary intent) ââ */
+/* Ã¢ÂÂÃ¢ÂÂ Form submit button (also primary intent) Ã¢ÂÂÃ¢ÂÂ */
 button[data-testid="baseButton-secondaryFormSubmit"],
 button[data-testid="baseButton-primaryFormSubmit"] {{
   background-color: {RED} !important;
@@ -256,31 +256,31 @@ button[data-testid="baseButton-primaryFormSubmit"] {{
   font-weight: 700 !important;
 }}
 
-/* ââ Metric cards ââ */
+/* Ã¢ÂÂÃ¢ÂÂ Metric cards Ã¢ÂÂÃ¢ÂÂ */
 [data-testid="stMetricValue"] {{
   color: {GREEN} !important;
   font-weight: 700 !important;
 }}
 
-/* ââ Active tab indicator ââ */
+/* Ã¢ÂÂÃ¢ÂÂ Active tab indicator Ã¢ÂÂÃ¢ÂÂ */
 button[data-baseweb="tab"][aria-selected="true"] {{
   border-bottom: 3px solid {RED} !important;
   color: {RED} !important;
   font-weight: 700 !important;
 }}
 
-/* ââ Page headings ââ */
+/* Ã¢ÂÂÃ¢ÂÂ Page headings Ã¢ÂÂÃ¢ÂÂ */
 h1 {{ color: {GREEN} !important; font-weight: 900 !important; }}
 h2 {{ color: {GREEN} !important; font-weight: 700 !important; }}
 h3 {{ color: {BLACK} !important; font-weight: 700 !important; }}
 
-/* ââ Horizontal divider tinted red ââ */
+/* Ã¢ÂÂÃ¢ÂÂ Horizontal divider tinted red Ã¢ÂÂÃ¢ÂÂ */
 hr {{
   border-top: 2px solid {RED} !important;
   opacity: 0.35;
 }}
 
-/* ââ Brand strip (top-of-page header) ââ */
+/* Ã¢ÂÂÃ¢ÂÂ Brand strip (top-of-page header) Ã¢ÂÂÃ¢ÂÂ */
 .da-strip {{
   display: flex;
   align-items: center;
@@ -310,7 +310,7 @@ hr {{
   margin-top: 2px;
 }}
 
-/* ââ Login page ââ */
+/* Ã¢ÂÂÃ¢ÂÂ Login page Ã¢ÂÂÃ¢ÂÂ */
 .da-login-wrap {{
   text-align: center;
   padding: 20px 0 4px 0;
@@ -350,7 +350,7 @@ def inject_brand_css() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Logo image â SVG assets loaded once and encoded as base64 data URIs
+# Logo image Ã¢ÂÂ SVG assets loaded once and encoded as base64 data URIs
 # ---------------------------------------------------------------------------
 
 _LOGO_URIS: dict[str, str] = {}
@@ -370,6 +370,8 @@ def _load_logos() -> None:
                 _LOGO_URIS[variant] = f"data:image/svg+xml;base64,{b64}"
         except OSError:
             pass  # CSS wordmark fallback used when asset is missing
+
+_load_logos()
 
 def _logo_img(variant: str = "color", width_px: int = 220) -> str:
     """Return an <img> tag embedding the SVG logo as a base64 data URI.
