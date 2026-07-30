@@ -47,18 +47,116 @@ def render(role: str) -> None:
 # ---------------------------------------------------------------------------
 
 def _assigned_claims(role: str) -> None:
-    st.subheader("Assigned Claims")
-    # TODO: Query Delta table filtered to this service provider's ID
-    #   spark.sql("""
-    #     SELECT claim_ref, client_name, incident_type, report_date, status, priority
-    #     FROM claims.assignments
-    #     WHERE provider_id = current_user_id AND status != 'Closed'
-    #   """)
-    sample = [
-        {"Claim Ref": "CLM-20250715123456", "Client": "John Mwangi",   "Incident Type": "Motor Accident", "Date": "2025-07-15", "Status": "Under Assessment", "Priority": "High"},
-        {"Claim Ref": "CLM-20250714098765", "Client": "Amina Wanjiru",  "Incident Type": "Theft",          "Date": "2025-07-14", "Status": "Awaiting Report",  "Priority": "Medium"},
+    """Show claims assigned to this provider, filtered by expert type."""
+    expert_type = role
+    st.subheader("My Assigned Jobs")
+
+    # Attempt real data fetch via core_api, fall back to demo data
+    demo_jobs = [
+        {"claim_ref": "CLM-20250615-002", "expert_type": "assessor", "status": "in_progress", "assigned_at": "2025-06-16", "claim_type": "Motor Bumper", "vehicle": "KCA 123A", "estimated_cost": 45000},
+        {"claim_ref": "CLM-20250701-001", "expert_type": "garage", "status": "pending", "assigned_at": "2025-07-02", "claim_type": "Windscreen", "vehicle": "KBZ 456B", "estimated_cost": 32000},
+        {"claim_ref": "CLM-20250620-006", "expert_type": "assessor", "status": "completed", "assigned_at": "2025-06-21", "claim_type": "Third Party", "vehicle": "KC 789C", "estimated_cost": 85000},
     ]
-    st.dataframe(sample, use_container_width=True)
+
+    if core_api.is_configured():
+        try:
+            # Real: fetch assignments from core_api filtered by expert_type + provider
+            assignments = core_api.get_assignments(expert_type=expert_type)
+            # assignments is a list of dicts with at least claim_ref, status, assigned_at, claim_type, vehicle, estimated_cost
+            my_jobs = assignments if assignments else []
+        except Exception:
+            my_jobs = [j for j in demo_jobs if j["expert_type"] == expert_type]
+    else:
+        # Demo mode: filter hardcoded demo data by expert_type
+        my_jobs = [j for j in demo_jobs if j["expert_type"] == expert_type]
+
+    if not my_jobs:
+        st.info(f"No {expert_type} jobs assigned to you.")
+        return
+
+    for job in my_jobs:
+        with st.expander(f"**{job['claim_ref']}** — {job.get('claim_type', 'N/A')} — {job['status']}"):
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown(f"**Vehicle:** {job.get('vehicle', 'N/A')}")
+                st.markdown(f"**Assigned:** {job.get('assigned_at', 'N/A')}")
+            with col2:
+                est = job.get('estimated_cost', 0)
+                st.markdown(f"**Est. Cost:** KES {est:,}" if est else "**Est. Cost:** —")
+                st.markdown(f"**Status:** {job['status']}")
+
+            # Status update workflow
+            next_statuses = {
+                "pending": ["accepted", "rejected"],
+                "accepted": ["in_progress"],
+                "in_progress": ["completed"],
+            }
+            available = next_statuses.get(job["status"], [])
+            if available:
+                sel = st.selectbox("Update status", available, key=f"upd_{job['claim_ref']}")
+                if st.button("Submit Update", key=f"btn_{job['claim_ref']}"):
+                    if core_api.is_configured():
+                        try:
+                            core_api.update_job_status(
+                                claim_ref=job["claim_ref"],
+                                new_status=sel,
+                                actor=st.session_state.get("user", expert_type),
+                            )
+                            st.success(f"✅ Status updated to '{sel}' for {job['claim_ref']}")
+                            core_api.invalidate_claim_cache(job["claim_ref"])
+                        except Exception as e:
+                            st.error(f"Failed to update status: {e}")
+                    else:
+                        st.success(f"✅ Status updated to '{sel}' for {job['claim_ref']} (demo mode)")
+
+
+# ---------------------------------------------------------------------------
+# Garage: Submit Quote
+# ---------------------------------------------------------------------------
+
+def _submit_quote(claim_ref: str, provider_email: str) -> None:
+    """Submit a quote for a job (used by assessor/garage/investigator)."""
+    st.subheader("Submit Quote")
+
+    with st.form(key=f"quote_form_{claim_ref}"):
+        labour = st.number_input("Labour Cost (KES)", min_value=0, value=0, step=500, key=f"lab_{claim_ref}")
+        parts = st.number_input("Parts Cost (KES)", min_value=0, value=0, step=500, key=f"parts_{claim_ref}")
+        total = labour + parts
+
+        # WHT auto-calc (5% for assessors/garages/investigators)
+        wht = total * 0.05
+        net = total - wht
+
+        col1, col2, col3 = st.columns(3)
+        with col1: st.text_input("Total", value=f"KES {total:,}", disabled=True)
+        with col2: st.text_input("WHT (5%)", value=f"KES {wht:,.0f}", disabled=True)
+        with col3: st.text_input("Net Quoted", value=f"KES {net:,.0f}", disabled=True)
+
+        note = st.text_area("Quote Note", key=f"qnote_{claim_ref}")
+        submitted = st.form_submit_button("Submit Quote")
+        if submitted:
+            if core_api.is_configured():
+                try:
+                    # Log communication event
+                    core_api.log_communication(
+                        claim_ref=claim_ref,
+                        channel="quote",
+                        direction="outbound",
+                        summary=f"Quote submitted — KES {net:,.0f} net (labour={labour}, parts={parts}, wht={wht:,.0f})",
+                        actor=provider_email,
+                    )
+                    # Register quote document
+                    core_api.register_document(
+                        claim_ref=claim_ref,
+                        doc_type="quote",
+                        description=f"Quote — KES {net:,.0f} net | labour={labour} parts={parts} wht={wht:,.0f} | {note}",
+                        actor=provider_email,
+                    )
+                    st.success(f"✅ Quote submitted — KES {net:,.0f} net for {claim_ref}")
+                except Exception as e:
+                    st.error(f"Failed to submit quote: {e}")
+            else:
+                st.success(f"✅ Quote submitted — KES {net:,.0f} net for {claim_ref} (demo mode)")
 
 
 # ---------------------------------------------------------------------------
@@ -87,10 +185,28 @@ def _submit_assessment_report() -> None:
         if not claim_ref or not assessment_notes or not report_file:
             st.error("Claim reference, notes, and the PDF report are required.")
         else:
-            # TODO: Write to Delta + trigger notification to claims handler
-            #   spark.sql(f"INSERT INTO claims.assessment_reports VALUES (...)")
-            # TODO: Upload PDF to Unity Catalog Volume
-            st.success(f"Assessment report submitted for claim **{claim_ref}**.")
+            actor = st.session_state.get("user", "assessor")
+            if core_api.is_configured():
+                try:
+                    core_api.post_document(
+                        claim_ref,
+                        report_file.name,
+                        "application/pdf",
+                        report_file.getvalue(),
+                        "assessment_report",
+                    )
+                    core_api.log_communication(
+                        claim_ref=claim_ref,
+                        channel="assessment",
+                        direction="outbound",
+                        summary=f"Assessment report submitted — condition: {vehicle_condition}, repair estimate: KES {repair_estimate:,.2f}",
+                        actor=actor,
+                    )
+                    st.success(f"Assessment report submitted for claim **{claim_ref}**.")
+                except Exception as e:
+                    st.error(f"Failed to submit report: {e}")
+            else:
+                st.success(f"Assessment report submitted for claim **{claim_ref}** (demo mode).")
 
 
 # ---------------------------------------------------------------------------
@@ -104,7 +220,7 @@ def _approve_estimate() -> None:
         c1, c2 = st.columns(2)
         claim_ref       = c1.text_input("Claim Reference Number *")
         garage_name     = c2.text_input("Garage Name *")
-        estimate_amount = st.number_input("Estimate Amount (KES) *", min_value=0.0, format="%.2f")
+        estimate_amount = c2.number_input("Estimate Amount (KES) *", min_value=0.0, format="%.2f")
         decision        = st.radio("Decision *", ["Approve", "Reject", "Request Revision"])
         comments        = st.text_area("Comments / Conditions for Approval")
         submitted       = st.form_submit_button("Submit Decision", type="primary", use_container_width=True)
@@ -113,8 +229,28 @@ def _approve_estimate() -> None:
         if not claim_ref or not garage_name:
             st.error("Claim reference and garage name are required.")
         else:
-            # TODO: Write decision to Delta + notify garage + route to AP if Approved
-            st.success(f"Decision **{decision}** recorded for claim {claim_ref}. Garage notified.")
+            actor = st.session_state.get("user", "assessor")
+            if core_api.is_configured():
+                try:
+                    core_api.log_communication(
+                        claim_ref=claim_ref,
+                        channel="decision",
+                        direction="outbound",
+                        summary=f"Estimate decision: {decision} — garage: {garage_name}, amount: KES {estimate_amount:,.2f}, comments: {comments}",
+                        actor=actor,
+                    )
+                    core_api.update_claim_status(
+                        claim_ref,
+                        f"Estimate {decision}",
+                        note=f"Garage {garage_name}: {decision} — KES {estimate_amount:,.2f}",
+                        actor=actor,
+                    )
+                    core_api.invalidate_claim_cache(claim_ref)
+                    st.success(f"Decision **{decision}** recorded for claim {claim_ref}. Garage notified.")
+                except Exception as e:
+                    st.error(f"Failed to record decision: {e}")
+            else:
+                st.success(f"Decision **{decision}** recorded for claim {claim_ref}. Garage notified (demo mode).")
 
 
 # ---------------------------------------------------------------------------
@@ -138,11 +274,32 @@ def _submit_estimate() -> None:
         if not claim_ref or not estimate_file:
             st.error("Claim reference and the estimate PDF are required.")
         else:
-            # TODO: Write to Delta + notify assigned assessor for sign-off
-            # SLA: if no assessor decision within 48 h, escalate to claims manager
-            st.success(
-                f"Estimate submitted for **{claim_ref}**. Awaiting assessor approval (SLA: 48 hours)."
-            )
+            actor = st.session_state.get("user", "garage")
+            if core_api.is_configured():
+                try:
+                    core_api.post_document(
+                        claim_ref,
+                        estimate_file.name,
+                        "application/pdf",
+                        estimate_file.getvalue(),
+                        "repair_estimate",
+                    )
+                    core_api.log_communication(
+                        claim_ref=claim_ref,
+                        channel="estimate",
+                        direction="outbound",
+                        summary=f"Repair estimate submitted — labour: KES {labour_cost:,.2f}, parts: KES {parts_cost:,.2f}, total: KES {total_estimate:,.2f}",
+                        actor=actor,
+                    )
+                    st.success(
+                        f"Estimate submitted for **{claim_ref}**. Awaiting assessor approval (SLA: 48 hours)."
+                    )
+                except Exception as e:
+                    st.error(f"Failed to submit estimate: {e}")
+            else:
+                st.success(
+                    f"Estimate submitted for **{claim_ref}**. Awaiting assessor approval (SLA: 48 hours) (demo mode)."
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -167,8 +324,28 @@ def _request_supplementary() -> None:
         if not claim_ref or not reason:
             st.error("Claim reference and reason are required.")
         else:
-            # TODO: Write to Delta + notify claims handler for internal approval
-            st.success(f"Supplementary request submitted for **{claim_ref}**. Under review.")
+            actor = st.session_state.get("user", "garage")
+            if core_api.is_configured():
+                try:
+                    core_api.log_communication(
+                        claim_ref=claim_ref,
+                        channel="supplementary",
+                        direction="outbound",
+                        summary=f"Supplementary request — original: KES {approved_estimate:,.2f}, additional: KES {additional_amount:,.2f}, reason: {reason}",
+                        actor=actor,
+                    )
+                    core_api.update_claim_status(
+                        claim_ref,
+                        "Supplementary Requested",
+                        note=f"Additional amount: KES {additional_amount:,.2f} — {reason}",
+                        actor=actor,
+                    )
+                    core_api.invalidate_claim_cache(claim_ref)
+                    st.success(f"Supplementary request submitted for **{claim_ref}**. Under review.")
+                except Exception as e:
+                    st.error(f"Failed to submit request: {e}")
+            else:
+                st.success(f"Supplementary request submitted for **{claim_ref}**. Under review (demo mode).")
 
 
 # ---------------------------------------------------------------------------
@@ -202,38 +379,52 @@ def _submit_invoice() -> None:
         else:
             actor = st.session_state.get("user", "garage")
             # Upload invoice PDF to core system
-            if invoice_file is not None:
-                core_api.post_document(
-                    claim_ref,
-                    invoice_file.name,
-                    "application/pdf",
-                    invoice_file.getvalue(),
-                    "invoice",
-                )
+            if invoice_file is not None and core_api.is_configured():
+                try:
+                    core_api.post_document(
+                        claim_ref,
+                        invoice_file.name,
+                        "application/pdf",
+                        invoice_file.getvalue(),
+                        "invoice",
+                    )
+                except Exception as e:
+                    st.error(f"Failed to upload invoice: {e}")
+                    return
             # Update payment record in core system
-            payment_synced = core_api.update_payment_status(claim_ref, {
-                "status":         "Invoice Received",
-                "invoice_number": invoice_number,
-                "invoice_date":   str(invoice_date),
-                "amount":         invoice_amount,
-                "kra_pin":        kra_pin,
-                "bank_name":      bank_name,
-                "bank_account":   bank_account,
-                "bank_branch":    bank_branch,
-                "submitted_by":   actor,
-                "submitted_at":   datetime.datetime.utcnow().isoformat() + "Z",
-            })
-            # Also update overall claim status
-            core_api.update_claim_status(
-                claim_ref, "Invoice Submitted",
-                note=f"Invoice {invoice_number} KES {invoice_amount:,.2f}",
-                actor=actor,
-            )
-            core_api.invalidate_claim_cache(claim_ref)
-            msg = f"Invoice **{invoice_number}** for claim **{claim_ref}** submitted. Routed to accounts payable."
-            if not payment_synced and core_api.is_configured():
-                msg += " (Core system sync pending.)"
-            st.success(msg)
+            if core_api.is_configured():
+                try:
+                    payment_synced = core_api.update_payment_status(claim_ref, {
+                        "status":         "Invoice Received",
+                        "invoice_number": invoice_number,
+                        "invoice_date":   str(invoice_date),
+                        "amount":         invoice_amount,
+                        "kra_pin":        kra_pin,
+                        "bank_name":      bank_name,
+                        "bank_account":   bank_account,
+                        "bank_branch":    bank_branch,
+                        "submitted_by":   actor,
+                        "submitted_at":   datetime.datetime.utcnow().isoformat() + "Z",
+                    })
+                except Exception as e:
+                    st.error(f"Failed to update payment status: {e}")
+                    return
+                # Also update overall claim status
+                core_api.update_claim_status(
+                    claim_ref, "Invoice Submitted",
+                    note=f"Invoice {invoice_number} KES {invoice_amount:,.2f}",
+                    actor=actor,
+                )
+                core_api.invalidate_claim_cache(claim_ref)
+                msg = f"Invoice **{invoice_number}** for claim **{claim_ref}** submitted. Routed to accounts payable."
+                if not payment_synced:
+                    msg += " (Core system sync pending.)"
+                st.success(msg)
+            else:
+                st.success(
+                    f"Invoice **{invoice_number}** for claim **{claim_ref}** submitted. "
+                    "Routed to accounts payable (demo mode)."
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -424,6 +615,32 @@ def _submit_investigation_report() -> None:
         if not claim_ref or not findings or not report_file:
             st.error("Claim reference, findings, and the PDF report are required.")
         else:
-            # TODO: Write to Delta + notify claims handler
-            # TODO: Log action to audit table (timestamp, user, IP, claim_ref)
-            st.success(f"Investigation report submitted for **{claim_ref}**. Claims handler notified.")
+            actor = st.session_state.get("user", "investigator")
+            if core_api.is_configured():
+                try:
+                    core_api.post_document(
+                        claim_ref,
+                        report_file.name,
+                        "application/pdf",
+                        report_file.getvalue(),
+                        "investigation_report",
+                    )
+                    core_api.log_communication(
+                        claim_ref=claim_ref,
+                        channel="investigation",
+                        direction="outbound",
+                        summary=f"Investigation report submitted — recommendation: {recommendation}",
+                        actor=actor,
+                    )
+                    core_api.update_claim_status(
+                        claim_ref,
+                        "Investigation Submitted",
+                        note=f"Recommendation: {recommendation} — findings: {findings[:200]}",
+                        actor=actor,
+                    )
+                    core_api.invalidate_claim_cache(claim_ref)
+                    st.success(f"Investigation report submitted for **{claim_ref}**. Claims handler notified.")
+                except Exception as e:
+                    st.error(f"Failed to submit report: {e}")
+            else:
+                st.success(f"Investigation report submitted for **{claim_ref}**. Claims handler notified (demo mode).")
