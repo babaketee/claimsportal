@@ -1,11 +1,11 @@
-"""Shared analytics charts — live from main.claims.fnol_submissions.
+"""Shared analytics charts â live from main.claims.fnol_submissions.
 
 Provides four cached data loaders and `render_analytics()` which renders
-a 2×2 Plotly chart grid:
-  • Claims by Type (bar)
-  • Status Distribution (donut)
-  • Settlement Trend — monthly (line)
-  • Avg Claim Age by Type (horizontal bar)
+a 2Ã2 Plotly chart grid:
+  â¢ Claims by Type (bar)
+  â¢ Status Distribution (donut)
+  â¢ Settlement Trend â monthly (line)
+  â¢ Avg Claim Age by Type (horizontal bar)
 
 Usage in any view module:
     from views.analytics_charts import render_analytics
@@ -18,13 +18,10 @@ import os
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from databricks.sdk import WorkspaceClient
-from databricks.sdk.service.sql import StatementState
 
 # Register the Definite Assurance Plotly template on import
 from views.brand import DA_COLORWAY, DA_SCALE_GREEN_RED, GREEN, RED  # noqa: F401
 
-_WAREHOUSE_ID = os.environ.get("DATABRICKS_WAREHOUSE_ID", "4489dbff81694cd8")
 _FNOL         = "main.claims.fnol_submissions"
 
 
@@ -113,7 +110,7 @@ def _load_avg_cycle_time() -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def clear_cache() -> None:
-    """Invalidate all analytics caches — call before st.rerun()."""
+    """Invalidate all analytics caches â call before st.rerun()."""
     _load_claims_by_type.clear()      # type: ignore[attr-defined]
     _load_status_distribution.clear() # type: ignore[attr-defined]
     _load_settlement_trend.clear()    # type: ignore[attr-defined]
@@ -125,18 +122,18 @@ def clear_cache() -> None:
 # ---------------------------------------------------------------------------
 
 def render_analytics(show_refresh: bool = False) -> None:
-    """Render four live analytics charts in a 2×2 Plotly grid.
+    """Render four live analytics charts in a 2Ã2 Plotly grid.
 
     Args:
         show_refresh: When True, displays a Refresh button that clears
                       all caches and reruns the page.
     """
     if show_refresh:
-        if st.button("🔄 Refresh Analytics", help="Re-query Delta tables"):
+        if st.button("ð Refresh Analytics", help="Re-query Delta tables"):
             clear_cache()
             st.rerun()
 
-    with st.spinner("Loading analytics from Delta…"):
+    with st.spinner("Loading analytics from Deltaâ¦"):
         type_df   = _load_claims_by_type()
         status_df = _load_status_distribution()
         trend_df  = _load_settlement_trend()
