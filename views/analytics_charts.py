@@ -1,18 +1,18 @@
 """Shared analytics charts — live KPI view support.
 
-Provides four cached data loaders and `render_analytics()` which renders
-a 2×2 Plotly chart grid:
-  • Claims by Type (bar)
-  • Status Distribution (donut)
-  • Settlement Trend — monthly (line)
-  • Avg Claim Age by Type (horizontal bar)
+Provides four cached data loaders and render_analytics() which renders
+a 2x2 Plotly chart grid:
+  - Claims by Type (bar)
+  - Status Distribution (donut)
+  - Settlement Trend - monthly (line)
+  - Avg Claim Age by Type (horizontal bar)
 
 Environment variables for live data:
-  ANALYTICS_SQL_HOST   — Databricks host (e.g. https://dbc-xxx.cloud.databricks.com)
-  ANALYTICS_SQL_TOKEN  — Databricks personal access token
-  ANALYTICS_SQL_WAREHOUSE_ID — Databricks warehouse ID (optional, uses serverless if omitted)
-  ANALYTICS_SQL_CONNECTION_STRING — Alternative: any SQLAlchemy connection string
-  ANALYTICS_KPI_VIEW   — Full view name (default: claims.claims_kpi_view)
+  ANALYTICS_SQL_HOST   - Databricks host (e.g. https://dbc-xxx.cloud.databricks.com)
+  ANALYTICS_SQL_TOKEN  - Databricks personal access token
+  ANALYTICS_SQL_WAREHOUSE_ID - Databricks warehouse ID (optional)
+  ANALYTICS_SQL_CONNECTION_STRING - Alternative: any SQLAlchemy connection string
+  ANALYTICS_KPI_VIEW   - Full view name (default: claims.claims_kpi_view)
 
 Usage:
     from views.analytics_charts import render_analytics
@@ -28,7 +28,6 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-# Register the Definite Assurance Plotly template on import
 from views.brand import DA_COLORWAY, DA_SCALE_GREEN_RED, GREEN, RED  # noqa: F401
 
 # ---------------------------------------------------------------------------
@@ -55,13 +54,12 @@ def _run_sql(sql: str) -> pd.DataFrame:
 
     try:
         if _SQL_HOST and _SQL_TOKEN:
-            # Databricks SQL warehouses API
             import urllib.request
             import json
 
             warehouse_id = _SQL_WAREHOUSE or os.environ.get("DATABRICKS_WAREHOUSE_ID", "")
             endpoint = f"{_SQL_HOST}/api/2.0/sql/statements"
-            
+
             payload = json.dumps({
                 "statement": sql,
                 "warehouse_id": warehouse_id,
@@ -94,7 +92,6 @@ def _run_sql(sql: str) -> pd.DataFrame:
             return pd.DataFrame(rows, columns=[c["name"] for c in schema])
 
         elif _SQL_CONN:
-            # SQLAlchemy-compatible (PostgreSQL, MySQL, etc.)
             try:
                 from sqlalchemy import create_engine
             except ImportError:
@@ -115,8 +112,6 @@ def _run_sql(sql: str) -> pd.DataFrame:
 
 # ---------------------------------------------------------------------------
 # KPI view column mapping (claims.claims_kpi_view expected schema)
-# Expected columns: claim_type, claim_status, submitted_month, total_claims,
-#                   settled_claims, avg_cycle_days
 # ---------------------------------------------------------------------------
 
 def _load_claims_by_type() -> pd.DataFrame:
@@ -209,7 +204,7 @@ def _cached_avg_cycle_time() -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def clear_cache() -> None:
-    """Invalidate all analytics caches — call before st.rerun()."""
+    """Invalidate all analytics caches - call before st.rerun()."""
     _cached_claims_by_type.clear()      # type: ignore[attr-defined]
     _cached_status_distribution.clear() # type: ignore[attr-defined]
     _cached_settlement_trend.clear()   # type: ignore[attr-defined]
@@ -221,23 +216,23 @@ def clear_cache() -> None:
 # ---------------------------------------------------------------------------
 
 def render_analytics(show_refresh: bool = False) -> None:
-    """Render four analytics charts in a 2×2 Plotly grid."""
+    """Render four analytics charts in a 2x2 Plotly grid."""
     if show_refresh:
-        if st.button("🔄 Refresh Analytics", help="Re-query KPI view"):
+        if st.button("Refresh Analytics", help="Re-query KPI view"):
             clear_cache()
             st.rerun()
 
-    with st.spinner("Loading analytics from KPI view…"):
+    with st.spinner("Loading analytics from KPI view..."):
         type_df   = _cached_claims_by_type()
         status_df = _cached_status_distribution()
         trend_df  = _cached_settlement_trend()
         cycle_df  = _cached_avg_cycle_time()
 
-    mode_label = "📊 Demo data" if _DEMO_MODE else "📈 Live KPI data"
+    mode_label = "Demo data" if _DEMO_MODE else "Live KPI data"
     if _DEMO_MODE:
-        st.info(f"{mode_label} — set ANALYTICS_SQL_HOST / ANALYTICS_SQL_TOKEN secrets to connect live source")
+        st.info(f"{mode_label} - set ANALYTICS_SQL_HOST / ANALYTICS_SQL_TOKEN secrets to connect live source")
     else:
-        st.caption(f"{mode_label} — view: `{_KPI_VIEW}`")
+        st.caption(f"{mode_label} - view: {_KPI_VIEW}")
 
     # ---- Row 1 ----------------------------------------------------------------
     col_l, col_r = st.columns(2)
