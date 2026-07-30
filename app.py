@@ -1,7 +1,6 @@
 import os
 import sys
 
-from views.super_admin import show as super_admin_show
 
 import streamlit as st
 
@@ -10,12 +9,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 st.set_page_config(
     page_title="Definite Assurance | Claims Portal",
-    page_icon="✔",
+    page_icon="â",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Brand identity — must run right after set_page_config
+# Brand identity â must run right after set_page_config
 from views.brand import (  # noqa: E402
     inject_brand_css,
     brand_strip,
@@ -39,7 +38,6 @@ ROLES: dict[str, str] = {
     "spare_parts":    "Spare Parts Provider",
     "legal":          "Legal Officer",
     "admin":          "Internal Staff / Admin",
-    "super_admin":    "Super Admin",
 }
 
 # ---------------------------------------------------------------------------
@@ -83,8 +81,8 @@ def show_login() -> None:
                 st.error("Invalid email or password.")
             else:
                 # TODO: Replace this stub with your real auth flow:
-                #   - IMS REST API  →  POST /api/auth/login
-                #   - Okta / Azure AD SSO  →  OIDC redirect
+                #   - IMS REST API  â  POST /api/auth/login
+                #   - Okta / Azure AD SSO  â  OIDC redirect
                 #   - OTP via Africa's Talking / Twilio
                 acct = DEMO_ACCOUNTS[identifier]
                 st.session_state.update(
@@ -138,8 +136,6 @@ def main() -> None:
     elif role == "legal":
         from views.legal import render
         render()
-    elif role == "super_admin":
-        super_admin_show()
     elif role == "admin":
         from views.admin_dashboard import render
         render()
