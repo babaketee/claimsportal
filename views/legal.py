@@ -1,10 +1,9 @@
-"""Legal Officer Portal — disputed claims, litigation, repudiation appeals, and recovery."""
+"""Legal Officer Portal â disputed claims, litigation, repudiation appeals, and recovery."""
 from __future__ import annotations
 import datetime
 import streamlit as st
 
-# SQLite-backed — Delta warehouse removed
-_DISPUTES_TABLE = None
+# SQLite-backed â Delta warehouse removed
 
 
 def render() -> None:
@@ -86,8 +85,8 @@ def _repudiation_appeals() -> None:
     )
 
     appeals = [
-        {"Ref": "CLM-20250701044512", "Client": "Mercy Holdings Ltd.", "Grounds": "Policy Lapse dispute — alleges payment was made",     "Received": "2025-07-10", "Status": "Under Review"},
-        {"Ref": "CLM-20250620031122", "Client": "Susan Waithaka",      "Grounds": "Non-disclosure — client disputes materiality",        "Received": "2025-07-05", "Status": "Response Drafted"},
+        {"Ref": "CLM-20250701044512", "Client": "Mercy Holdings Ltd.", "Grounds": "Policy Lapse dispute â alleges payment was made",     "Received": "2025-07-10", "Status": "Under Review"},
+        {"Ref": "CLM-20250620031122", "Client": "Susan Waithaka",      "Grounds": "Non-disclosure â client disputes materiality",        "Received": "2025-07-05", "Status": "Response Drafted"},
     ]
     st.dataframe(appeals, use_container_width=True)
     st.divider()
@@ -96,9 +95,9 @@ def _repudiation_appeals() -> None:
         c1, c2 = st.columns(2)
         claim_ref  = c1.text_input("Claim Reference *")
         decision   = c2.selectbox("Legal Recommendation *", [
-            "Uphold Repudiation — Defend Position",
-            "Partially Uphold — Ex-Gratia Offer",
-            "Reverse Repudiation — Reopen Claim",
+            "Uphold Repudiation â Defend Position",
+            "Partially Uphold â Ex-Gratia Offer",
+            "Reverse Repudiation â Reopen Claim",
             "Refer to External Counsel",
         ])
         c1, c2 = st.columns(2)
@@ -127,7 +126,7 @@ def _litigation_tracker() -> None:
 
     cases = [
         {"Ref": "CLM-20250712055431", "Client / Plaintiff": "Peter Ochieng",  "Court": "Milimani Commercial Court", "Case No.": "ELC/123/2025", "Status": "Active",       "Next Hearing": "2025-08-05", "Claim Amount (KES)": "1,200,000", "External Counsel": "Kariuki & Co."},
-        {"Ref": "CLM-20250615029988", "Client / Plaintiff": "James Obuya",    "Court": "Magistrate — Kibera",       "Case No.": "CIV/088/2025", "Status": "Consent Order","Next Hearing": "—",          "Claim Amount (KES)": "95,000",    "External Counsel": "Mutua & Partners"},
+        {"Ref": "CLM-20250615029988", "Client / Plaintiff": "James Obuya",    "Court": "Magistrate â Kibera",       "Case No.": "CIV/088/2025", "Status": "Consent Order","Next Hearing": "â",          "Claim Amount (KES)": "95,000",    "External Counsel": "Mutua & Partners"},
     ]
     st.dataframe(cases, use_container_width=True)
     st.divider()
@@ -140,9 +139,9 @@ def _litigation_tracker() -> None:
         c1, c2 = st.columns(2)
         hearing_date   = c1.date_input("Hearing / Filing Date *")
         hearing_result = c2.selectbox("Result / Action *", [
-            "Hearing held — adjourned",
-            "Judgment delivered — in our favour",
-            "Judgment delivered — against us",
+            "Hearing held â adjourned",
+            "Judgment delivered â in our favour",
+            "Judgment delivered â against us",
             "Consent Order agreed",
             "Case withdrawn by plaintiff",
             "Settlement reached out of court",
@@ -162,7 +161,7 @@ def _litigation_tracker() -> None:
         elif amount_awarded > 0 and "Judgment" in hearing_result and "against us" in hearing_result:
             st.error(f"Judgment of KES {amount_awarded:,.2f} against insurer. **Automatically routed to Finance Head** for payment approval.")
         else:
-            st.success(f"Litigation update saved for **{claim_ref}** — {hearing_result}.")
+            st.success(f"Litigation update saved for **{claim_ref}** â {hearing_result}.")
 
 
 # ---------------------------------------------------------------------------
@@ -187,7 +186,7 @@ def _demand_letters_ots() -> None:
         st.markdown("**\U0001f4ee Offers to Settle (OTS) Issued**")
         offers = [
             {"Ref": "CLM-20250709012345", "Offer (KES)": "550,000", "Issued": "2025-07-19", "Expiry": "2025-07-26", "Status": "Awaiting Acceptance"},
-            {"Ref": "CLM-20250615029988", "Offer (KES)": "95,000",  "Issued": "2025-07-12", "Expiry": "2025-07-19", "Status": "Accepted — Consent Order"},
+            {"Ref": "CLM-20250615029988", "Offer (KES)": "95,000",  "Issued": "2025-07-12", "Expiry": "2025-07-19", "Status": "Accepted â Consent Order"},
         ]
         st.dataframe(offers, use_container_width=True)
 
