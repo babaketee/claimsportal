@@ -1,4 +1,4 @@
-"""Internal Admin Dashboard — live Delta data from main.claims.fnol_submissions."""
+"""Internal Admin Dashboard â live Delta data from main.claims.fnol_submissions."""
 from __future__ import annotations
 
 import datetime
@@ -6,8 +6,6 @@ import os
 
 import pandas as pd
 import streamlit as st
-from databricks.sdk import WorkspaceClient
-from databricks.sdk.service.sql import StatementState
 from views.analytics_charts import render_analytics, clear_cache as _clear_analytics_cache
 
 _WAREHOUSE_ID = os.environ.get("DATABRICKS_WAREHOUSE_ID", "4489dbff81694cd8")
