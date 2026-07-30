@@ -1,14 +1,85 @@
 """Head of Claims Portal — oversight, high-value approvals, performance management."""
 from __future__ import annotations
 import streamlit as st
+import os
+from datetime import date, datetime, timedelta
 from views.analytics_charts import render_analytics
 
 HOC_AUTHORITY_LIMIT = 2_000_000  # KES — above this the Finance Head must co-approve
+REINSURANCE_THRESHOLD = int(os.environ.get("REINSURANCE_THRESHOLD", "2000000"))  # KES
 
+# ─── Helpers ───────────────────────────────────────────────────────────────────
+
+def get_sla_badge(claim_ref: str, submitted_at: str) -> str:
+    """
+    Returns an HTML SLA countdown badge.
+    Acknowledgement SLA: 3 days  |  Settlement SLA: 30 days
+    Colour: green (>7 days left), amber (≤7 days), red (past deadline).
+    """
+    try:
+        submitted = datetime.strptime(submitted_at[:10], "%Y-%m-%d")
+    except Exception:
+        return "⚪ Invalid date"
+
+    today = datetime.now().date()
+    ack_deadline = (submitted + timedelta(days=3)).date()
+    settle_deadline = (submitted + timedelta(days=30)).date()
+
+    ack_days  = (ack_deadline  - today).days
+    settle_days = (settle_deadline - today).days
+
+    def _colour(days):
+        if days < 0:  return "🔴"
+        if days <= 7: return "🟡"
+        return "🟢"
+
+    ack_sym  = _colour(ack_days)
+    sett_sym = _colour(settle_days)
+    return (
+        f"<span title='Ack SLA'>{ack_sym} Ack:{ack_days}d</span>&nbsp;"
+        f"<span title='Settlement SLA'>{sett_sym} Settle:{settle_days}d</span>"
+    )
+
+
+def is_reinsurance_flag(claim_ref: str, core_api) -> bool:
+    """True when total incurred (reserves + settlements) exceeds REINSURANCE_THRESHOLD."""
+    try:
+        reserves    = core_api.get_total_reserves(claim_ref) or 0
+        settlements = sum(
+            (s.get("amount") or 0)
+            for s in core_api.get_settlements(claim_ref) or []
+        )
+        return (reserves + settlements) > REINSURANCE_THRESHOLD
+    except Exception:
+        return False
+
+
+def render_overdue_alerts(core_api) -> None:
+    """Renders a dismissible alert banner for all overdue diary entries."""
+    try:
+        entries = core_api.get_overdue_entries() or []
+    except Exception:
+        entries = []
+    if not entries:
+        return
+    st.error(f"⚠️ {len(entries)} overdue task(s) require immediate attention.")
+    rows = []
+    for e in entries:
+        rows.append({
+            "Claim": e.get("claim_ref", ""),
+            "Task":  e.get("description", e.get("task", "")),
+            "Due":   e.get("due_date", ""),
+            "Days Over": e.get("days_overdue", ""),
+            "Owner": e.get("assigned_to", ""),
+        })
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+
+
+# ─── Page ──────────────────────────────────────────────────────────────────────
 
 def render() -> None:
     st.title("🏛️ Head of Claims Portal")
-    tabs = st.tabs(["📊 Dashboard","✅ Pending Approvals","📋 All Claims","🚫 Repudiation","📈 Performance"])
+    tabs = st.tabs(["📊 Dashboard", "✅ Pending Approvals", "📋 All Claims", "🚫 Repudiation", "📈 Performance"])
     with tabs[0]: _dashboard()
     with tabs[1]: _pending_approvals()
     with tabs[2]: _all_claims()
@@ -19,11 +90,11 @@ def render() -> None:
 def _dashboard() -> None:
     st.subheader("Claims Overview")
     c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("Open Claims",            "142", "+8 today")
-    c2.metric("Pending HoC Approval",   "7",   "+2")
-    c3.metric("Avg. Settlement Days",   "18",  "-2 vs last month")
+    c1.metric("Open Claims",             "142", "+8 today")
+    c2.metric("Pending HoC Approval",     "7",   "+2")
+    c3.metric("Avg. Settlement Days",    "18",  "-2 vs last month")
     c4.metric("Total Reserves (KES M)", "48.6","")
-    c5.metric("Settled This Month",     "89",  "+12 vs last")
+    c5.metric("Settled This Month",      "89",  "+12 vs last")
     st.divider()
     st.markdown("#### Live Analytics")
     render_analytics(show_refresh=True)
@@ -40,9 +111,9 @@ def _pending_approvals() -> None:
     st.subheader("Settlements Awaiting Head of Claims Approval")
     st.warning(f"Settlements between KES 500,001 and KES {HOC_AUTHORITY_LIMIT:,} require your sign-off before Finance processes payment.")
     pending = [
-        {"Ref":"CLM-20250712055431","Type":"Write-Off",      "Net (KES)":"850,000",   "Officer":"S. Karimi","Submitted":"2025-07-16"},
-        {"Ref":"CLM-20250709012345","Type":"Cash Settlement", "Net (KES)":"620,000",   "Officer":"T. Mutua", "Submitted":"2025-07-17"},
-        {"Ref":"CLM-20250705088812","Type":"Third-Party",     "Net (KES)":"1,200,000", "Officer":"J. Njeru", "Submitted":"2025-07-15"},
+        {"Ref":"CLM-20250712055431","Type":"Write-Off",       "Net (KES)":"850,000",  "Officer":"S. Karimi","Submitted":"2025-07-16"},
+        {"Ref":"CLM-20250709012345","Type":"Cash Settlement", "Net (KES)":"620,000",  "Officer":"T. Mutua", "Submitted":"2025-07-17"},
+        {"Ref":"CLM-20250705088812","Type":"Third-Party",     "Net (KES)":"1,200,000","Officer":"J. Njeru", "Submitted":"2025-07-15"},
     ]
     st.dataframe(pending, use_container_width=True)
     st.divider()
@@ -77,9 +148,9 @@ def _all_claims() -> None:
     c4.date_input("To")
     st.dataframe([
         {"Ref":"CLM-20250715123456","Client":"John Mwangi",   "Type":"Motor Accident","Status":"Under Assessment",  "Officer":"S. Karimi","Reserve (KES)":"320,000"},
-        {"Ref":"CLM-20250714098765","Client":"Amina Wanjiru", "Type":"Theft",         "Status":"Awaiting Report",   "Officer":"T. Mutua", "Reserve (KES)":"180,000"},
-        {"Ref":"CLM-20250712055431","Client":"Peter Ochieng", "Type":"Fire",          "Status":"Pending Settlement","Officer":"S. Karimi","Reserve (KES)":"850,000"},
-        {"Ref":"CLM-20250710033210","Client":"Grace Njoki",   "Type":"Windscreen",    "Status":"Awaiting Payment",  "Officer":"J. Njeru", "Reserve (KES)":"22,000"},
+        {"Ref":"CLM-20250714098765","Client":"Amina Wanjiru", "Type":"Theft",          "Status":"Awaiting Report",   "Officer":"T. Mutua", "Reserve (KES)":"180,000"},
+        {"Ref":"CLM-20250712055431","Client":"Peter Ochieng", "Type":"Fire",           "Status":"Pending Settlement","Officer":"S. Karimi","Reserve (KES)":"850,000"},
+        {"Ref":"CLM-20250710033210","Client":"Grace Njoki",   "Type":"Windscreen",     "Status":"Awaiting Payment",  "Officer":"J. Njeru", "Reserve (KES)":"22,000"},
         {"Ref":"CLM-20250709012345","Client":"David Otieno",  "Type":"Motor Accident","Status":"Pending HoC Appr.", "Officer":"T. Mutua", "Reserve (KES)":"620,000"},
     ], use_container_width=True)
 

@@ -1,6 +1,8 @@
 import os
 import sys
 
+from views.super_admin import show as super_admin_show
+
 import streamlit as st
 
 # Ensure views/ is importable
@@ -37,6 +39,7 @@ ROLES: dict[str, str] = {
     "spare_parts":    "Spare Parts Provider",
     "legal":          "Legal Officer",
     "admin":          "Internal Staff / Admin",
+    "super_admin":    "Super Admin",
 }
 
 # ---------------------------------------------------------------------------
@@ -54,6 +57,7 @@ DEMO_ACCOUNTS: dict[str, dict] = {
     "spares@insure.demo":       {"password": "Catalog#99",   "role": "spare_parts"},
     "legal@insure.demo":        {"password": "Counsel#99",   "role": "legal"},
     "admin@insure.demo":        {"password": "SysCtrl#99",   "role": "admin"},
+    "super@insure.demo":        {"password": "Super#99",      "role": "super_admin"},
 }
 
 
@@ -134,6 +138,8 @@ def main() -> None:
     elif role == "legal":
         from views.legal import render
         render()
+    elif role == "super_admin":
+        super_admin_show()
     elif role == "admin":
         from views.admin_dashboard import render
         render()

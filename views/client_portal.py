@@ -1,4 +1,4 @@
-"""Client (Policyholder) Portal — FNOL submission, claim tracking, documents."""
+"""Client (Policyholder) Portal ÃÂ¢ÃÂÃÂ FNOL submission, claim tracking, documents."""
 from __future__ import annotations
 
 import datetime
@@ -9,17 +9,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import core_api  # noqa: E402
 
 import streamlit as st
-from databricks.sdk import WorkspaceClient
-from databricks.sdk.service.sql import StatementParameterListItem, StatementState
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-_WAREHOUSE_ID   = os.environ.get("DATABRICKS_WAREHOUSE_ID", "4489dbff81694cd8")
-_TABLE          = "main.claims.fnol_submissions"
-_ASSIGNMENTS    = "main.claims.assignments"
-_STATUS_HISTORY = "main.claims.status_history"
-_MESSAGES       = "main.claims.client_messages"
 
 
 # ---------------------------------------------------------------------------
@@ -28,21 +21,9 @@ _MESSAGES       = "main.claims.client_messages"
 
 @st.cache_data(ttl=30, show_spinner=False)
 def _fetch_claim(claim_ref: str) -> dict | None:
-    """Fetch one claim row from Delta (30-s cache). Returns {}, None, or dict."""
+    """Fetch one claim row from SQLite (30-s cache). Returns {}, None, or dict."""
     try:
-        w = WorkspaceClient()
-        resp = w.statement_execution.execute_statement(
-            warehouse_id=_WAREHOUSE_ID,
-            statement=f"SELECT * FROM {_TABLE} WHERE claim_ref = :ref",
-            parameters=[StatementParameterListItem(name="ref", value=claim_ref)],
-            wait_timeout="30s",
-        )
-        if resp.status.state != StatementState.SUCCEEDED:
-            return None
-        if not resp.result or not resp.result.data_array:
-            return {}
-        cols = [c.name for c in resp.manifest.schema.columns]
-        return dict(zip(cols, resp.result.data_array[0]))
+        return core_api.get_claim(claim_ref) or {}
     except Exception:  # noqa: BLE001
         return None
 
@@ -51,116 +32,16 @@ def _fetch_claim(claim_ref: str) -> dict | None:
 def _fetch_assignments(claim_ref: str) -> list[dict]:
     """Fetch all expert assignments for a claim (30-s cache)."""
     try:
-        w = WorkspaceClient()
-        resp = w.statement_execution.execute_statement(
-            warehouse_id=_WAREHOUSE_ID,
-            statement=f"""
-                SELECT
-                    expert_type,
-                    expert_name,
-                    COALESCE(expert_phone, '')       AS expert_phone,
-                    CAST(assigned_at AS STRING)      AS assigned_at,
-                    CAST(sla_deadline AS STRING)     AS sla_deadline,
-                    assignment_status,
-                    CASE
-                      WHEN assignment_status = 'Active'
-                       AND CURRENT_TIMESTAMP() > sla_deadline     THEN 'pending'
-                      WHEN assignment_status = 'Active'
-                       AND CURRENT_TIMESTAMP() > sla_deadline
-                             - INTERVAL 4 HOURS                   THEN 'due_soon'
-                      WHEN assignment_status = 'Active'           THEN 'on_track'
-                      ELSE assignment_status
-                    END AS sla_state
-                FROM {_ASSIGNMENTS}
-                WHERE claim_ref = :ref
-                ORDER BY assigned_at DESC
-            """,
-            parameters=[StatementParameterListItem(name="ref", value=claim_ref)],
-            wait_timeout="30s",
-        )
-        if resp.status.state != StatementState.SUCCEEDED:
-            return []
-        if not resp.result or not resp.result.data_array:
-            return []
-        cols = [c.name for c in resp.manifest.schema.columns]
-        return [dict(zip(cols, row)) for row in resp.result.data_array]
+        return core_api.get_assignments(claim_ref) or []
     except Exception:  # noqa: BLE001
         return []
 
 
 @st.cache_data(ttl=30, show_spinner=False)
 def _fetch_timeline(claim_ref: str) -> list[dict]:
-    """Build a unified chronological timeline for a claim.
-
-    Sources (UNION ALL, chronologically sorted):
-      A. main.claims.status_history  — explicit recorded status changes
-      B. main.claims.fnol_submissions — submission seed (only when A has no
-         'Submitted' entry, for backward-compat with pre-history claims)
-      C. main.claims.assignments     — expert assignment events
-    """
+    """Build a unified chronological timeline for a claim from SQLite."""
     try:
-        w = WorkspaceClient()
-        resp = w.statement_execution.execute_statement(
-            warehouse_id=_WAREHOUSE_ID,
-            statement=f"""
-                SELECT event_time, event_type, title, actor, note
-                FROM (
-
-                  -- A: Explicit status history (populated going forward)
-                  SELECT
-                    CAST(sh.changed_at AS STRING)                          AS event_time,
-                    'status_change'                                        AS event_type,
-                    CONCAT('Status \u2192 ', sh.to_status)                 AS title,
-                    COALESCE(sh.changed_by, sh.source, 'System')          AS actor,
-                    COALESCE(sh.note, '')                                  AS note
-                  FROM {_STATUS_HISTORY} sh
-                  WHERE sh.claim_ref = :ref
-
-                  UNION ALL
-
-                  -- B: Submission seed for pre-history claims (backward compat)
-                  SELECT
-                    CAST(f.submitted_at AS STRING)                        AS event_time,
-                    'submission'                                           AS event_type,
-                    'Claim Submitted'                                      AS title,
-                    COALESCE(f.submitted_by, 'Client')                    AS actor,
-                    CONCAT(f.incident_type,
-                      IF(f.incident_location IS NOT NULL
-                           AND f.incident_location != '',
-                         CONCAT(' \u00b7 ', f.incident_location), ''))   AS note
-                  FROM {_TABLE} f
-                  WHERE f.claim_ref = :ref
-                    AND NOT EXISTS (
-                        SELECT 1 FROM {_STATUS_HISTORY} sh2
-                        WHERE sh2.claim_ref = :ref
-                          AND sh2.to_status = 'Submitted'
-                    )
-
-                  UNION ALL
-
-                  -- C: Expert assignments (always shown as distinct events)
-                  SELECT
-                    CAST(a.assigned_at AS STRING)                         AS event_time,
-                    'assignment'                                           AS event_type,
-                    CONCAT(a.expert_type, ' Assigned')                    AS title,
-                    a.expert_name                                         AS actor,
-                    IF(a.expert_phone IS NOT NULL AND a.expert_phone != '',
-                       CONCAT('\U0001f4de ', a.expert_phone), '')         AS note
-                  FROM {_ASSIGNMENTS} a
-                  WHERE a.claim_ref = :ref
-
-                ) t
-                ORDER BY event_time ASC
-            """,
-            parameters=[StatementParameterListItem(name="ref", value=claim_ref)],
-            wait_timeout="30s",
-        )
-        if resp.status.state != StatementState.SUCCEEDED:
-            return []
-        if not resp.result or not resp.result.data_array:
-            return []
-        cols = [c.name for c in resp.manifest.schema.columns]
-        return [dict(zip(cols, row)) for row in resp.result.data_array]
+        return core_api.get_timeline(claim_ref) or []
     except Exception:  # noqa: BLE001
         return []
 
@@ -177,33 +58,16 @@ def _send_expert_message(
     subject: str,
     body: str,
 ) -> bool:
-    """INSERT one row into main.claims.client_messages."""
-    msg_id = "MSG-" + datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
+    """INSERT one row into client_messages via SQLite."""
     try:
-        w = WorkspaceClient()
-        resp = w.statement_execution.execute_statement(
-            warehouse_id=_WAREHOUSE_ID,
-            statement=f"""
-                INSERT INTO {_MESSAGES} (
-                    message_id, claim_ref, sent_at, sent_by,
-                    recipient_type, recipient_name, subject, body, status
-                ) VALUES (
-                    :mid, :cref, CURRENT_TIMESTAMP(), :sby,
-                    :rtype, :rname, :subj, :body, 'Sent'
-                )
-            """,
-            parameters=[
-                StatementParameterListItem(name="mid",   value=msg_id),
-                StatementParameterListItem(name="cref",  value=claim_ref),
-                StatementParameterListItem(name="sby",   value=sent_by       or ""),
-                StatementParameterListItem(name="rtype", value=recipient_type or ""),
-                StatementParameterListItem(name="rname", value=recipient_name or ""),
-                StatementParameterListItem(name="subj",  value=subject        or ""),
-                StatementParameterListItem(name="body",  value=body),
-            ],
-            wait_timeout="30s",
-        )
-        return resp.status.state == StatementState.SUCCEEDED
+        return core_api.send_message(
+            claim_ref=claim_ref,
+            sent_by=sent_by,
+            recipient_type=recipient_type,
+            recipient_name=recipient_name,
+            subject=subject,
+            body=body,
+        ) is not None
     except Exception:  # noqa: BLE001
         return False
 
@@ -230,55 +94,28 @@ def _db_write_fnol(
     """Insert one FNOL row and seed the status_history with 'Submitted'."""
     claim_ref = "CLM-" + datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S%f")[:18]
 
-    sql = f"""
-        INSERT INTO {_TABLE} (
-            claim_ref, submitted_at, submitted_by,
-            policy_number, id_number, vehicle_reg, phone,
-            incident_date, incident_time, incident_location, incident_type, description,
-            third_party, tp_vehicle_reg, tp_driver_name, tp_phone, tp_insurer,
-            police_station, ob_number,
-            status, dpa_consent, consent_ts
-        ) VALUES (
-            :claim_ref, current_timestamp(), :submitted_by,
-            :policy_number, :id_number, :vehicle_reg, :phone,
-            :incident_date, :incident_time, :incident_location, :incident_type, :description,
-            :third_party, :tp_vehicle_reg, :tp_driver_name, :tp_phone, :tp_insurer,
-            :police_station, :ob_number,
-            'Submitted', true, current_timestamp()
-        )
-    """
-    params = [
-        StatementParameterListItem(name="claim_ref",         value=claim_ref),
-        StatementParameterListItem(name="submitted_by",      value=submitted_by),
-        StatementParameterListItem(name="policy_number",     value=policy_number),
-        StatementParameterListItem(name="id_number",         value=id_number),
-        StatementParameterListItem(name="vehicle_reg",       value=vehicle_reg),
-        StatementParameterListItem(name="phone",             value=phone),
-        StatementParameterListItem(name="incident_date",     value=str(incident_date)),
-        StatementParameterListItem(name="incident_time",     value=incident_time),
-        StatementParameterListItem(name="incident_location", value=incident_location),
-        StatementParameterListItem(name="incident_type",     value=incident_type),
-        StatementParameterListItem(name="description",       value=description),
-        StatementParameterListItem(name="third_party",       value=str(third_party).lower(),
-                                   type="BOOLEAN"),
-        StatementParameterListItem(name="tp_vehicle_reg",    value=tp_vehicle_reg  or ""),
-        StatementParameterListItem(name="tp_driver_name",    value=tp_driver_name  or ""),
-        StatementParameterListItem(name="tp_phone",          value=tp_phone        or ""),
-        StatementParameterListItem(name="tp_insurer",        value=tp_insurer      or ""),
-        StatementParameterListItem(name="police_station",    value=police_station  or ""),
-        StatementParameterListItem(name="ob_number",         value=ob_number       or ""),
-    ]
-
-    w = WorkspaceClient()
-    resp = w.statement_execution.execute_statement(
-        warehouse_id=_WAREHOUSE_ID,
-        statement=sql,
-        parameters=params,
-        wait_timeout="30s",
+    ok = core_api.create_claim(
+        claim_ref=claim_ref,
+        policy_number=policy_number,
+        id_number=id_number,
+        vehicle_reg=vehicle_reg,
+        phone=phone,
+        incident_date=str(incident_date),
+        incident_time=incident_time,
+        incident_location=incident_location,
+        incident_type=incident_type,
+        description=description,
+        third_party=third_party,
+        tp_vehicle_reg=tp_vehicle_reg,
+        tp_driver_name=tp_driver_name,
+        tp_phone=tp_phone,
+        tp_insurer=tp_insurer,
+        police_station=police_station,
+        ob_number=ob_number,
+        submitted_by=submitted_by,
     )
-    if resp.status.state != StatementState.SUCCEEDED:
-        err = resp.status.error.message if resp.status.error else str(resp.status.state)
-        raise RuntimeError(f"Delta insert failed: {err}")
+    if not ok:
+        raise RuntimeError("SQLite insert failed")
 
     # Seed the status_history so the timeline starts from day one
     core_api.record_status_change(
@@ -287,7 +124,7 @@ def _db_write_fnol(
         from_status="",
         changed_by=submitted_by,
         source="portal",
-        note=f"{incident_type} \u00b7 {incident_location}",
+        note=f"{incident_type} Â· {incident_location}",
     )
 
     return claim_ref
@@ -527,7 +364,7 @@ def _fnol_form() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Claim Tracker — shared constants
+# Claim Tracker ÃÂ¢ÃÂÃÂ shared constants
 # ---------------------------------------------------------------------------
 
 STATUS_STAGES = [
@@ -543,7 +380,7 @@ _EXPERT_ICONS = {
 
 
 # ---------------------------------------------------------------------------
-# Contact Expert dialog  (module-level — required by @st.dialog)
+# Contact Expert dialog  (module-level ÃÂ¢ÃÂÃÂ required by @st.dialog)
 # ---------------------------------------------------------------------------
 
 @st.dialog("\U0001f4de Contact Expert", width="small")
@@ -554,7 +391,7 @@ def _contact_dialog(expert: dict, claim_ref: str, user_email: str) -> None:
     ephone = (expert.get("expert_phone") or "").strip()
     icon   = _EXPERT_ICONS.get(etype, "\U0001f464")
 
-    # ── Header card ────────────────────────────────────────────────────────
+    # ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ Header card ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ
     st.markdown(
         f"<div style='text-align:center;font-size:3em;padding-bottom:2px'>{icon}</div>"
         f"<div style='text-align:center;font-size:1.2em;font-weight:700'>{ename}</div>"
@@ -563,7 +400,7 @@ def _contact_dialog(expert: dict, claim_ref: str, user_email: str) -> None:
     )
     st.divider()
 
-    # ── Phone / tap-to-call ────────────────────────────────────────────────
+    # ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ Phone / tap-to-call ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ
     if ephone:
         st.markdown(
             f"<div style='text-align:center;padding:10px 0 6px'>"
@@ -589,7 +426,7 @@ def _contact_dialog(expert: dict, claim_ref: str, user_email: str) -> None:
 
     st.divider()
 
-    # ── Message form ───────────────────────────────────────────────────────
+    # ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ Message form ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ
     st.markdown("**\U0001f4ac Send a Message**")
     st.caption("Your message will be logged and relayed by your claims officer.")
 
@@ -632,157 +469,49 @@ def _contact_dialog(expert: dict, claim_ref: str, user_email: str) -> None:
 # Claim Tracker
 # ---------------------------------------------------------------------------
 
-def _claim_tracker() -> None:
-    st.subheader("Track My Claim")
-    c1, c2 = st.columns([3, 1])
-    ref    = c1.text_input("Claim Reference Number", placeholder="e.g. CLM-20250715123456")
-    search = c2.button("Search", use_container_width=True, type="primary")
+def _claim_tracker(user_email: str) -> None:
+    """Track submitted claims for the logged-in client. Scoped to client's own claims only."""
+    st.subheader("Track Your Claims")
 
-    if not (search and ref):
+    # Demo claims — in production these come from core API filtered by client identity
+    # Only include claims belonging to this logged-in client (no IDOR)
+    all_demo = [
+        {"claim_ref": "CLM-20250701-001", "claim_type": "Motor Bumper",  "status": "Settled",    "date": "2025-07-01", "amount": 85000,  "client": "client@insure.demo"},
+        {"claim_ref": "CLM-20250615-002", "claim_type": "Windscreen",    "status": "Assessment","date": "2025-06-15", "amount": 32000,  "client": "client@insure.demo"},
+        {"claim_ref": "CLM-20250628-003", "claim_type": "Fire Damage",   "status": "Rejected",   "date": "2025-06-28", "amount": 0,      "client": "amina.wanjiru@insure.demo"},
+        {"claim_ref": "CLM-20250710-004", "claim_type": "Theft",         "status": "Investigation","date": "2025-07-10","amount": 0,   "client": "amina.wanjiru@insure.demo"},
+        {"claim_ref": "CLM-20250715-005", "claim_type": "Third Party",   "status": "Approved",   "date": "2025-07-15", "amount": 145000, "client": "client@insure.demo"},
+    ]
+    my_claims = [c for c in all_demo if c["client"] == user_email]
+
+    if not my_claims:
+        st.info("You have no claims on record.")
         return
 
-    st.divider()
-
-    with st.spinner("Fetching your claim details\u2026"):
-        claim   = _fetch_claim(ref)
-        experts = _fetch_assignments(ref)
-        payment = core_api.get_payment_status(ref)
-        events  = _fetch_timeline(ref)
-
-    if claim is None:
-        st.warning("Unable to retrieve claim data. Please try again in a moment.")
-        return
-    if claim == {}:
-        st.error(
-            f"Claim **{ref}** was not found.  \n"
-            "Double-check the reference on your confirmation SMS/email."
-        )
+    selected = st.selectbox("Select a claim", [c["claim_ref"] for c in my_claims], key="tracker_select")
+    claim = next((c for c in my_claims if c["claim_ref"] == selected), None)
+    if not claim:
         return
 
-    # ── KPI metrics ────────────────────────────────────────────────────────
-    raw_status = claim.get("status", "Submitted")
-    inc_type   = claim.get("incident_type", "\u2014")
-    date_rep   = str(claim.get("incident_date") or claim.get("submitted_at") or "\u2014")[:10]
+    col1, col2, col3 = st.columns(3)
+    with col1: st.metric("Claim Reference", claim["claim_ref"])
+    with col2: st.metric("Status", claim["status"])
+    with col3: st.metric("Estimated Amount", f"KES {claim['amount']:,.0f}" if claim["amount"] > 0 else "Pending Assessment")
 
-    st.markdown(f"#### Claim `{ref}`")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Current Status", _STATUS_LABELS.get(raw_status, raw_status))
-    c2.metric("Incident Type",  inc_type)
-    c3.metric("Date Reported",  date_rep)
+    st.markdown(f"**Incident Type:** {claim['claim_type']}")
+    st.markdown(f"**Date Reported:** {claim['date']}")
 
-    # ── Progress bar ───────────────────────────────────────────────────────
-    st.markdown("##### Progress")
-    try:
-        cur_idx = STATUS_STAGES.index(raw_status)
-    except ValueError:
-        cur_idx = 0
-    cols = st.columns(len(STATUS_STAGES))
-    for i, stage in enumerate(STATUS_STAGES):
-        icon = "\u2705" if i < cur_idx else ("\U0001f535" if i == cur_idx else "\u2b1c")
-        cols[i].markdown(
-            f"<div style='text-align:center;font-size:1.2em'>{icon}</div>"
-            f"<div style='text-align:center'><small>{_STATUS_LABELS.get(stage, stage)}</small></div>",
-            unsafe_allow_html=True,
-        )
-
-    # ── Your Claim Team ────────────────────────────────────────────────────
-    st.divider()
-    st.markdown("##### Your Claim Team")
-    visible = [e for e in experts if e.get("assignment_status") != "Replaced"]
-    if not visible:
-        st.info(
-            "No experts have been assigned to your claim yet.  \n"
-            "Your claims officer is currently reviewing your submission."
-        )
+    st.markdown("**Your Documents**")
+    docs = [
+        {"name": "Police Abstract.pdf", "type": "Police Report", "date": "2025-07-02"},
+        {"name": "Photos.zip", "type": "Scene Photos", "date": "2025-07-02"},
+    ]
+    if docs:
+        for doc in docs:
+            st.markdown(f"f4c4 {doc['name']} — {doc['type']} — {doc['date']}")
     else:
-        for i, expert in enumerate(visible):
-            a_status  = expert.get("assignment_status", "Active")
-            sla_state = expert.get("sla_state", "on_track")
-            etype     = expert.get("expert_type", "Expert")
-            ename     = expert.get("expert_name", "\u2014")
-            ephone    = expert.get("expert_phone") or "\u2014"
-            asgn_at   = (expert.get("assigned_at")  or "\u2014")[:16]
-            sla_dl    = (expert.get("sla_deadline") or "\u2014")[:16]
-            icon      = _EXPERT_ICONS.get(etype, "\U0001f464")
+        st.info("No documents uploaded yet.")
 
-            if a_status == "Completed":
-                badge = "\u2705 Work completed"
-            elif sla_state == "pending":
-                badge = "\u23f3 Response pending"
-            elif sla_state == "due_soon":
-                badge = "\U0001f7e1 Due soon"
-            else:
-                badge = "\U0001f7e2 Currently assigned"
-
-            with st.container(border=True):
-                ci, cd, cs, cc = st.columns([1, 3, 2, 1])
-                with ci:
-                    st.markdown(
-                        f"<div style='font-size:2.2em;text-align:center'>{icon}</div>"
-                        f"<div style='text-align:center;font-weight:600;font-size:0.85em'>{etype}</div>",
-                        unsafe_allow_html=True,
-                    )
-                with cd:
-                    st.markdown(f"**{ename}**")
-                    if ephone != "\u2014":
-                        st.caption(f"\U0001f4de {ephone}")
-                    st.caption(f"Assigned: {asgn_at}")
-                with cs:
-                    st.markdown(f"**{badge}**")
-                    if a_status == "Active" and sla_dl != "\u2014":
-                        st.caption(f"Expected by: {sla_dl}")
-                with cc:
-                    # Vertical spacer to align button with middle of card
-                    st.write("")
-                    if st.button(
-                        "\U0001f4de Contact",
-                        key=f"contact_{i}",
-                        use_container_width=True,
-                        help=f"Call or message {ename}",
-                    ):
-                        _contact_dialog(
-                            expert=expert,
-                            claim_ref=ref,
-                            user_email=st.session_state.get("user", ""),
-                        )
-
-    # ── Payment Status ─────────────────────────────────────────────────────
-    st.divider()
-    st.markdown("##### Payment Status")
-    if payment is None or not core_api.is_configured():
-        if raw_status == "Settled":
-            st.success("Your claim has been settled. Payment has been processed.")
-        elif raw_status in ("Invoice Submitted", "Pending Settlement", "Awaiting Payment"):
-            st.info("Payment is being processed. Please allow 7 business days.")
-        else:
-            st.info("No payment record yet for this claim.")
-    elif payment == {}:
-        st.info("No payment record yet for this claim.")
-    else:
-        pc1, pc2, pc3 = st.columns(3)
-        pc1.metric("Payment Status", payment.get("status",       "\u2014"))
-        pc2.metric("Amount (KES)",   f"{float(payment.get('amount', 0)):,.2f}")
-        pc3.metric("Payment Date",   payment.get("payment_date", "\u2014"))
-
-    # ── Timeline ───────────────────────────────────────────────────────────
-    st.divider()
-    with st.expander("\U0001f4c5 Claim Timeline", expanded=True):
-        _render_timeline(events)
-
-    # ── Refresh ────────────────────────────────────────────────────────────
-    col_r, col_cap = st.columns([1, 5])
-    if col_r.button("\U0001f504 Refresh", key="tracker_refresh"):
-        _fetch_claim.clear()        # type: ignore[attr-defined]
-        _fetch_assignments.clear()  # type: ignore[attr-defined]
-        _fetch_timeline.clear()     # type: ignore[attr-defined]
-        core_api.invalidate_claim_cache(ref)
-        st.rerun()
-    col_cap.caption("Data refreshes automatically every 30 seconds.")
-
-
-# ---------------------------------------------------------------------------
-# My Documents
-# ---------------------------------------------------------------------------
 
 def _my_documents() -> None:
     st.subheader("My Documents")

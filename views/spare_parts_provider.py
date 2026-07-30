@@ -8,6 +8,14 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
+from datetime import date
+
+# Import core_api when available (railway-migration)
+try:
+    from supabase import core_api
+    _HAS_CORE_API = True
+except ImportError:
+    _HAS_CORE_API = False
 
 # ---------------------------------------------------------------------------
 # Sample data  (replace with Delta / core_api queries in production)
@@ -100,6 +108,9 @@ MY_BIDS = [
     },
 ]
 
+# RFQ bids stored via core_api.log_communication — keyed by (rfq_id, provider_id)
+_MY_SUBMITTED_BIDS: list[dict] = []
+
 ACTIVE_ORDERS = [
     {
         "Order Ref":         "ORD-20250710001",
@@ -179,7 +190,7 @@ NOTIFICATIONS = [
 # ---------------------------------------------------------------------------
 
 def render() -> None:
-    st.title("🔩 Spare Parts Provider Portal")
+    st.title("🔧 Spare Parts Provider Portal")
 
     unread = sum(1 for n in NOTIFICATIONS if not n["Read"])
     if unread:
@@ -189,10 +200,11 @@ def render() -> None:
         "📢 Open Broadcasts",
         "📝 Submit Bid",
         "📊 My Bids",
-        "📦 Active Orders",
-        "🧾 Submit Invoice",
+        "🚚 Active Orders",
+        "📤 Submit Invoice",
         "💳 Payment Status",
         "🔔 Notifications",
+        "🛒 RFQ Bids",
     ])
     with tabs[0]: _open_broadcasts()
     with tabs[1]: _submit_bid()
@@ -201,6 +213,7 @@ def render() -> None:
     with tabs[4]: _submit_invoice()
     with tabs[5]: _payment_status()
     with tabs[6]: _notifications()
+    with tabs[7]: _rfq_bids()
 
 
 # ---------------------------------------------------------------------------
@@ -287,13 +300,65 @@ def _submit_bid() -> None:
         if missing:
             st.error("Please complete all required fields (*).")
         else:
-            # TODO: INSERT INTO claims.rfq_bids
-            # TODO: Notify claims officer / garage that a new bid was received
             bid_ref = f"BID-{datetime.datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
-            st.success(
-                f"Bid **{bid_ref}** submitted for **{rfq_ref}**. "
-                "You will receive a notification once the evaluation is complete."
-            )
+
+            # Store via core_api if available
+            if _HAS_CORE_API:
+                try:
+                    core_api.log_communication(
+                        channel="rfq_bid",
+                        claim_ref=rfq_ref,
+                        message={
+                            "bid_ref": bid_ref,
+                            "company_name": company_name,
+                            "brand": brand,
+                            "condition": condition,
+                            "part_number": your_part_no,
+                            "unit_price": unit_price,
+                            "delivery_days": delivery_days,
+                            "warranty": warranty,
+                            "delivery_from": delivery_from,
+                            "notes": notes,
+                        },
+                    )
+                    st.success(
+                        f"Bid **{bid_ref}** submitted for **{rfq_ref}** and stored via core_api. "
+                        "You will receive a notification once the evaluation is complete."
+                    )
+                except Exception as e:
+                    st.warning(f"core_api unavailable ({e}); bid stored locally.")
+                    _store_bid_locally(bid_ref, rfq_ref, company_name, brand, condition, your_part_no, unit_price, delivery_days, warranty, delivery_from, notes)
+                    st.success(
+                        f"Bid **{bid_ref}** submitted for **{rfq_ref}** (local mode). "
+                        "You will receive a notification once the evaluation is complete."
+                    )
+            else:
+                _store_bid_locally(bid_ref, rfq_ref, company_name, brand, condition, your_part_no, unit_price, delivery_days, warranty, delivery_from, notes)
+                st.success(
+                    f"Bid **{bid_ref}** submitted for **{rfq_ref}**. "
+                    "You will receive a notification once the evaluation is complete."
+                )
+
+
+def _store_bid_locally(bid_ref: str, rfq_ref: str, company_name: str, brand: str, condition: str, your_part_no: str, unit_price: float, delivery_days: int, warranty: str, delivery_from: str, notes: str) -> None:
+    """Append a bid to the in-memory _MY_SUBMITTED_BIDS list (local fallback)."""
+    _MY_SUBMITTED_BIDS.append({
+        "Bid Ref":          bid_ref,
+        "RFQ Ref":          rfq_ref,
+        "Part":             next((r["Part Description"] for r in BROADCASTS if r["RFQ Ref"] == rfq_ref), ""),
+        "Company":          company_name,
+        "Brand":            brand,
+        "Condition":        condition,
+        "Your Part No":     your_part_no,
+        "Unit Price (KES)": f"{unit_price:,.2f}",
+        "Lead Time (days)": delivery_days,
+        "Warranty":         warranty,
+        "Delivery From":    delivery_from,
+        "Notes":            notes,
+        "Submitted":        date.today().isoformat(),
+        "Status":           "🟡 Pending Review",
+        "Result Notes":     "",
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -306,12 +371,17 @@ def _my_bids() -> None:
 
     # TODO: Query claims.rfq_bids WHERE provider_id = current_user_id
 
-    st.dataframe(MY_BIDS, use_container_width=True)
+    # Merge demo bids + any locally stored bids
+    all_bids = list(MY_BIDS)
+    if _MY_SUBMITTED_BIDS:
+        all_bids = all_bids + _MY_SUBMITTED_BIDS
+
+    st.dataframe(all_bids, use_container_width=True)
 
     st.divider()
-    total   = len(MY_BIDS)
-    won     = sum(1 for b in MY_BIDS if "Won"  in b["Status"])
-    lost    = sum(1 for b in MY_BIDS if "Lost" in b["Status"])
+    total   = len(all_bids)
+    won     = sum(1 for b in all_bids if "Won"  in b.get("Status", ""))
+    lost    = sum(1 for b in all_bids if "Lost" in b.get("Status", ""))
     pending = total - won - lost
 
     c1, c2, c3, c4 = st.columns(4)
@@ -347,7 +417,7 @@ def _active_orders() -> None:
     st.markdown("**Update Delivery Status**")
     with st.form("update_delivery"):
         c1, c2 = st.columns(2)
-        order_ref       = c1.selectbox("Order Reference *", [o["Order Ref"] for o in ACTIVE_ORDERS])
+        order_ref        = c1.selectbox("Order Reference *", [o["Order Ref"] for o in ACTIVE_ORDERS])
         delivery_status = c2.selectbox(
             "New Delivery Status *",
             ["Pending Dispatch", "In Transit", "Delivered"],
@@ -492,3 +562,149 @@ def _notifications() -> None:
 
     if not NOTIFICATIONS:
         st.info("No notifications yet.")
+
+
+# ---------------------------------------------------------------------------
+# Tab 8: RFQ Bids  (NEW — linked to core_api)
+# ---------------------------------------------------------------------------
+
+def _rfq_bids() -> None:
+    """Show open RFQs and submit bids, stored via core_api.log_communication."""
+    st.subheader("🛒 Spare Parts RFQ Bids")
+    st.info(
+        "Browse **open RFQs** below and submit your best bid. "
+        "All bids are stored via **core_api.log_communication(channel='rfq_bid')**. "
+        "A bid comparison table appears after submission."
+    )
+
+    # Open RFQs for bidding
+    open_rfqs = [
+        {
+            "rfq_id":  "RFQ-2025-07-001",
+            "claim_ref": "CLM-20250615-002",
+            "parts":   "Bumper Assembly, Headlamp Unit",
+            "quantity": 2,
+            "urgency": "normal",
+            "issued":   "2025-06-28",
+        },
+        {
+            "rfq_id":  "RFQ-2025-07-002",
+            "claim_ref": "CLM-20250701-001",
+            "parts":   "Windscreen, Wiper Blades",
+            "quantity": 3,
+            "urgency": "urgent",
+            "issued":   "2025-07-05",
+        },
+    ]
+
+    with st.expander("📋 RFQ Bid Comparison (Submitted Bids)"):
+        if _MY_SUBMITTED_BIDS:
+            st.dataframe(_MY_SUBMITTED_BIDS, use_container_width=True)
+        else:
+            st.info("No bids submitted yet in this session.")
+
+    st.markdown("---")
+    st.markdown("### Submit a Bid for an Open RFQ")
+
+    for rfq in open_rfqs:
+        with st.expander(f"**{rfq['rfq_id']}** — {rfq['claim_ref']} — {rfq['parts']}"):
+            st.markdown(
+                f"**Quantity:** {rfq['quantity']} | "
+                f"**Urgency:** {rfq['urgency']} | "
+                f"**Issued:** {rfq['issued']}"
+            )
+
+            with st.form(key=f"bid_{rfq['rfq_id']}"):
+                c1, c2 = st.columns(2)
+                unit_price = c1.number_input(
+                    "Unit Price (KES) *", min_value=0, value=0, step=100,
+                    key=f"up_{rfq['rfq_id']}"
+                )
+                lead_time = c2.text_input(
+                    "Lead Time (days) *",
+                    key=f"lt_{rfq['rfq_id']}", value="7"
+                )
+                warranty = st.selectbox(
+                    "Warranty *",
+                    ["3 months", "6 months", "1 year"],
+                    key=f"war_{rfq['rfq_id']}"
+                )
+                note = st.text_area(
+                    "Note / Comments",
+                    key=f"bn_{rfq['rfq_id']}",
+                    placeholder="Optional: brand, OEM equivalent, payment terms..."
+                )
+
+                submitted = st.form_submit_button(
+                    f"Submit Bid for {rfq['rfq_id']}",
+                    type="primary"
+                )
+
+                if submitted:
+                    bid_ref = f"BID-{datetime.datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+
+                    if _HAS_CORE_API:
+                        try:
+                            core_api.log_communication(
+                                channel="rfq_bid",
+                                claim_ref=rfq["claim_ref"],
+                                message={
+                                    "bid_ref":        bid_ref,
+                                    "rfq_id":         rfq["rfq_id"],
+                                    "unit_price":     unit_price,
+                                    "lead_time_days": lead_time,
+                                    "warranty":       warranty,
+                                    "note":           note,
+                                },
+                            )
+                            st.success(
+                                f"✅ Bid **{bid_ref}** submitted for **{rfq['rfq_id']}** "
+                                f"at KES {unit_price:,}/unit — stored via core_api."
+                            )
+                        except Exception as e:
+                            st.warning(f"core_api error ({e}); storing bid locally.")
+                            _MY_SUBMITTED_BIDS.append({
+                                "Bid Ref":          bid_ref,
+                                "RFQ Ref":          rfq["rfq_id"],
+                                "Part":             rfq["parts"],
+                                "Company":          "—",
+                                "Brand":            "—",
+                                "Condition":        "—",
+                                "Your Part No":     "—",
+                                "Unit Price (KES)": f"{unit_price:,.2f}",
+                                "Lead Time (days)": lead_time,
+                                "Warranty":         warranty,
+                                "Delivery From":    "—",
+                                "Notes":            note,
+                                "Submitted":        date.today().isoformat(),
+                                "Status":           "🟡 Pending Review",
+                                "Result Notes":     "",
+                            })
+                            st.success(
+                                f"✅ Bid **{bid_ref}** submitted for **{rfq['rfq_id']}** "
+                                f"at KES {unit_price:,}/unit (local mode)."
+                            )
+                    else:
+                        _MY_SUBMITTED_BIDS.append({
+                            "Bid Ref":          bid_ref,
+                            "RFQ Ref":          rfq["rfq_id"],
+                            "Part":             rfq["parts"],
+                            "Company":          "—",
+                            "Brand":            "—",
+                            "Condition":        "—",
+                            "Your Part No":     "—",
+                            "Unit Price (KES)": f"{unit_price:,.2f}",
+                            "Lead Time (days)": lead_time,
+                            "Warranty":         warranty,
+                            "Delivery From":    "—",
+                            "Notes":            note,
+                            "Submitted":        date.today().isoformat(),
+                            "Status":           "🟡 Pending Review",
+                            "Result Notes":     "",
+                        })
+                        st.success(
+                            f"✅ Bid **{bid_ref}** submitted for **{rfq['rfq_id']}** "
+                            f"at KES {unit_price:,}/unit (local mode — core_api not available)."
+                        )
+
+                    st.rerun()
