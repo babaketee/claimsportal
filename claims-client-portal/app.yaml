@@ -1,0 +1,21 @@
+command:
+  - streamlit
+  - run
+  - app.py
+  - --server.port
+  - "$DATABRICKS_APP_PORT"
+  - --server.address
+  - "0.0.0.0"
+
+env:
+  # Base URL of your insurance core system REST API
+  # e.g. https://core.myinsurer.co.ke/api/v1
+  - name: CORE_API_BASE_URL
+    value: ""
+
+  # Bearer token / API key issued by the core system
+  # Store the real value as a Databricks Secret and reference it here:
+  #   valueFrom:
+  #     secret: claims-portal/core-api-token
+  - name: CORE_API_TOKEN
+    value: ""

@@ -1,0 +1,845 @@
+{
+  "datasets": [
+    {
+      "name": "auto_approval_funnel",
+      "displayName": "Auto-Approval Funnel",
+      "queryLines": [
+        "SELECT\n",
+        "  'Total Claims' AS stage,\n",
+        "  COUNT(*) AS count\n",
+        "FROM\n",
+        "  workspace.default.claims_silver\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  'Low Severity (<$3k)',\n",
+        "  COUNT(*)\n",
+        "FROM\n",
+        "  workspace.default.claims_silver\n",
+        "WHERE\n",
+        "  damage_amount < 3000\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  'Not Suspicious',\n",
+        "  COUNT(*)\n",
+        "FROM\n",
+        "  workspace.default.claims_silver\n",
+        "WHERE\n",
+        "  damage_amount < 3000\n",
+        "  AND is_suspicious_flag = FALSE\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  'Reported Same Day',\n",
+        "  COUNT(*)\n",
+        "FROM\n",
+        "  workspace.default.claims_silver\n",
+        "WHERE\n",
+        "  damage_amount < 3000\n",
+        "  AND is_suspicious_flag = FALSE\n",
+        "  AND report_lag_days <= 1\n",
+        "UNION ALL\n",
+        "SELECT\n",
+        "  'Auto-Approvable',\n",
+        "  COUNT(*)\n",
+        "FROM\n",
+        "  workspace.default.claims_silver\n",
+        "WHERE\n",
+        "  is_auto_approvable = TRUE\n",
+        "ORDER BY\n",
+        "  count DESC"
+      ]
+    },
+    {
+      "name": "severity_status",
+      "displayName": "Severity vs Status",
+      "queryLines": [
+        "SELECT\n",
+        "  claim_severity,\n",
+        "  claim_status,\n",
+        "  COUNT(*) AS claim_count\n",
+        "FROM\n",
+        "  workspace.default.claims_silver\n",
+        "GROUP BY\n",
+        "  1,\n",
+        "  2\n",
+        "ORDER BY\n",
+        "  1,\n",
+        "  2"
+      ]
+    },
+    {
+      "name": "monthly_claims",
+      "displayName": "Monthly Claims Volume",
+      "queryLines": [
+        "SELECT\n",
+        "  DATE_TRUNC('month', claim_date) AS month,\n",
+        "  claim_type,\n",
+        "  COUNT(*) AS total_claims,\n",
+        "  SUM(net_claim_amount) AS total_payout\n",
+        "FROM\n",
+        "  workspace.default.claims_silver\n",
+        "GROUP BY\n",
+        "  1,\n",
+        "  2\n",
+        "ORDER BY\n",
+        "  1,\n",
+        "  2"
+      ]
+    },
+    {
+      "name": "claims_by_state",
+      "displayName": "Claims by State",
+      "queryLines": [
+        "SELECT\n",
+        "  state,\n",
+        "  COUNT(*) AS total_claims,\n",
+        "  SUM(net_claim_amount) AS total_payout,\n",
+        "  ROUND(AVG(damage_amount), 0) AS avg_damage\n",
+        "FROM\n",
+        "  workspace.default.claims_silver\n",
+        "GROUP BY\n",
+        "  state\n",
+        "ORDER BY\n",
+        "  total_claims DESC"
+      ]
+    },
+    {
+      "name": "fraud_risk",
+      "displayName": "Fraud Risk Distribution",
+      "queryLines": [
+        "SELECT\n",
+        "  fraud_risk_tier,\n",
+        "  claim_type,\n",
+        "  COUNT(*) AS claim_count,\n",
+        "  ROUND(AVG(fraud_score), 1) AS avg_fraud_score,\n",
+        "  ROUND(AVG(damage_amount), 0) AS avg_damage\n",
+        "FROM\n",
+        "  workspace.default.claims_gold_fraud_scores\n",
+        "GROUP BY\n",
+        "  1,\n",
+        "  2\n",
+        "ORDER BY\n",
+        "  1,\n",
+        "  2"
+      ]
+    },
+    {
+      "name": "top_adjusters",
+      "displayName": "Top Adjusters",
+      "queryLines": [
+        "SELECT\n",
+        "  s.adjuster_id,\n",
+        "  COUNT(*) AS claims_handled,\n",
+        "  ROUND(AVG(s.damage_amount), 0) AS avg_damage,\n",
+        "  SUM(\n",
+        "    CASE\n",
+        "      WHEN s.claim_status = 'Settled' THEN 1\n",
+        "      ELSE 0\n",
+        "    END\n",
+        "  ) AS settled_count,\n",
+        "  ROUND(\n",
+        "    AVG(\n",
+        "      CASE\n",
+        "        WHEN s.is_suspicious_flag THEN f.fraud_score\n",
+        "      END\n",
+        "    ),\n",
+        "    1\n",
+        "  ) AS avg_fraud_score_on_suspicious\n",
+        "FROM\n",
+        "  workspace.default.claims_silver s\n",
+        "    JOIN workspace.default.claims_gold_fraud_scores f USING (claim_id)\n",
+        "GROUP BY\n",
+        "  s.adjuster_id\n",
+        "ORDER BY\n",
+        "  claims_handled DESC\n",
+        "LIMIT 20"
+      ]
+    },
+    {
+      "name": "kpi_summary",
+      "displayName": "KPI Summary",
+      "queryLines": [
+        "SELECT\n",
+        "  COUNT(*) AS total_claims,\n",
+        "  ROUND(AVG(damage_amount), 2) AS avg_damage_amount,\n",
+        "  ROUND(\n",
+        "    SUM(\n",
+        "      CASE\n",
+        "        WHEN claim_status = 'Approved' THEN 1\n",
+        "        ELSE 0\n",
+        "      END\n",
+        "    )\n",
+        "      * 100.0\n",
+        "      / COUNT(*),\n",
+        "    1\n",
+        "  ) AS approval_rate_pct,\n",
+        "  ROUND(\n",
+        "    SUM(\n",
+        "      CASE\n",
+        "        WHEN is_suspicious_flag = TRUE THEN 1\n",
+        "        ELSE 0\n",
+        "      END\n",
+        "    )\n",
+        "      * 100.0\n",
+        "      / COUNT(*),\n",
+        "    1\n",
+        "  ) AS fraud_rate_pct,\n",
+        "  ROUND(\n",
+        "    SUM(\n",
+        "      CASE\n",
+        "        WHEN is_auto_approvable = TRUE THEN 1\n",
+        "        ELSE 0\n",
+        "      END\n",
+        "    )\n",
+        "      * 100.0\n",
+        "      / COUNT(*),\n",
+        "    1\n",
+        "  ) AS auto_approval_rate_pct\n",
+        "FROM\n",
+        "  workspace.default.claims_silver"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "c278aff1",
+      "displayName": "Claims Overview",
+      "layout": [
+        {
+          "widget": {
+            "name": "header",
+            "multilineTextboxSpec": {
+              "lines": [
+                "## Claims Analytics Dashboard\n",
+                "End-to-end view of claims volume, fraud risk, severity, auto-approval eligibility, and adjuster performance."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "line_monthly_claims",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "monthly_claims",
+                  "fields": [
+                    {
+                      "name": "claim_type",
+                      "expression": "`claim_type`"
+                    },
+                    {
+                      "name": "month",
+                      "expression": "`month`"
+                    },
+                    {
+                      "name": "sum(total_claims)",
+                      "expression": "SUM(`total_claims`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Monthly Claims Volume Trend",
+                "showTitle": true
+              },
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "month",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(total_claims)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "claim_type",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 7,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_total_claims",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_summary",
+                  "fields": [
+                    {
+                      "name": "sum(total_claims)",
+                      "expression": "SUM(`total_claims`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Total Claims",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(total_claims)",
+                  "rowNumber": 0
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "bar_fraud_risk",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "fraud_risk",
+                  "fields": [
+                    {
+                      "name": "claim_type",
+                      "expression": "`claim_type`"
+                    },
+                    {
+                      "name": "fraud_risk_tier",
+                      "expression": "`fraud_risk_tier`"
+                    },
+                    {
+                      "name": "sum(claim_count)",
+                      "expression": "SUM(`claim_count`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Fraud Risk Distribution",
+                "showTitle": true
+              },
+              "mark": {
+                "layout": "stack"
+              },
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "fraud_risk_tier",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "sum(claim_count)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "claim_type",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 7,
+            "y": 5,
+            "width": 5,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_avg_damage",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_summary",
+                  "fields": [
+                    {
+                      "name": "sum(avg_damage_amount)",
+                      "expression": "SUM(`avg_damage_amount`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Avg Damage Amount",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(avg_damage_amount)",
+                  "rowNumber": 0
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "heatmap_severity_status",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "severity_status",
+                  "fields": [
+                    {
+                      "name": "sum(claim_count)",
+                      "expression": "SUM(`claim_count`)"
+                    },
+                    {
+                      "name": "claim_status",
+                      "expression": "`claim_status`"
+                    },
+                    {
+                      "name": "claim_severity",
+                      "expression": "`claim_severity`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Claims by Severity & Status",
+                "showTitle": true
+              },
+              "widgetType": "heatmap",
+              "encodings": {
+                "x": {
+                  "fieldName": "claim_status",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "claim_severity",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "color": {
+                  "fieldName": "sum(claim_count)",
+                  "scale": {
+                    "type": "quantitative",
+                    "colorRamp": {
+                      "mode": "scheme",
+                      "scheme": "blues"
+                    }
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 11,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_approval_rate",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_summary",
+                  "fields": [
+                    {
+                      "name": "sum(approval_rate_pct)",
+                      "expression": "SUM(`approval_rate_pct`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Approval Rate %",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(approval_rate_pct)",
+                  "rowNumber": 0
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 2,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "map_claims_by_state",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "claims_by_state",
+                  "fields": [
+                    {
+                      "name": "sum(total_claims)",
+                      "expression": "SUM(`total_claims`)"
+                    },
+                    {
+                      "name": "state",
+                      "expression": "`state`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 1,
+              "frame": {
+                "title": "Claims by State",
+                "showTitle": true
+              },
+              "widgetType": "choropleth-map",
+              "encodings": {
+                "color": {
+                  "fieldName": "sum(total_claims)",
+                  "scale": {
+                    "type": "quantitative",
+                    "colorRamp": {
+                      "mode": "scheme",
+                      "scheme": "orangered"
+                    }
+                  }
+                },
+                "region": {
+                  "regionType": "mapbox-v4-admin",
+                  "admin0": {
+                    "type": "value",
+                    "geographicRole": "admin0-name-en",
+                    "value": "United States"
+                  },
+                  "admin1": {
+                    "fieldName": "state",
+                    "type": "field",
+                    "geographicRole": "admin1-iso-3166-2"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 11,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_fraud_rate",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_summary",
+                  "fields": [
+                    {
+                      "name": "sum(fraud_rate_pct)",
+                      "expression": "SUM(`fraud_rate_pct`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Fraud Rate %",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(fraud_rate_pct)",
+                  "rowNumber": 0
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 7,
+            "y": 2,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "funnel_auto_approval",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "auto_approval_funnel",
+                  "fields": [
+                    {
+                      "name": "sum(count)",
+                      "expression": "SUM(`count`)"
+                    },
+                    {
+                      "name": "stage",
+                      "expression": "`stage`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "Auto-Approval Eligibility Funnel",
+                "showTitle": true
+              },
+              "widgetType": "funnel",
+              "encodings": {
+                "x": {
+                  "fieldName": "sum(count)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "y": {
+                  "fieldName": "stage",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 16,
+            "width": 5,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_auto_approval",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "kpi_summary",
+                  "fields": [
+                    {
+                      "name": "sum(auto_approval_rate_pct)",
+                      "expression": "SUM(`auto_approval_rate_pct`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Auto-Approval Rate %",
+                "showTitle": true
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(auto_approval_rate_pct)",
+                  "rowNumber": 0
+                }
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 2,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "table_adjusters",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "top_adjusters",
+                  "fields": [
+                    {
+                      "name": "adjuster_id",
+                      "expression": "`adjuster_id`"
+                    },
+                    {
+                      "name": "claims_handled",
+                      "expression": "`claims_handled`"
+                    },
+                    {
+                      "name": "avg_damage",
+                      "expression": "`avg_damage`"
+                    },
+                    {
+                      "name": "settled_count",
+                      "expression": "`settled_count`"
+                    },
+                    {
+                      "name": "avg_fraud_score_on_suspicious",
+                      "expression": "`avg_fraud_score_on_suspicious`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Top Adjusters by Claim Volume",
+                "showTitle": true
+              },
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "adjuster_id"
+                  },
+                  {
+                    "fieldName": "claims_handled"
+                  },
+                  {
+                    "fieldName": "avg_damage"
+                  },
+                  {
+                    "fieldName": "settled_count"
+                  },
+                  {
+                    "fieldName": "avg_fraud_score_on_suspicious"
+                  }
+                ]
+              },
+              "data": {
+                "queryName": "main_query"
+              }
+            }
+          },
+          "position": {
+            "x": 5,
+            "y": 16,
+            "width": 7,
+            "height": 5
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "widgetHeaderAlignment": "ALIGNMENT_UNSPECIFIED"
+    },
+    "applyModeEnabled": false
+  }
+}

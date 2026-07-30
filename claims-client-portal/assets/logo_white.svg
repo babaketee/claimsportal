@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 68"
+     role="img" aria-label="Definite Assurance">
+  <title>Definite Assurance</title>
+  <!--
+    All-white variant for use on Aberdare Green (#0f4f48) backgrounds.
+    Checkmark and ASSURANCE use reduced opacity to create tonal depth.
+  -->
+
+  <!-- Full wordmark "Definite" in white -->
+  <text x="0" y="52"
+        font-family="'Arial Black','Helvetica Neue',Arial,sans-serif"
+        font-size="54" font-weight="900" fill="#ffffff">Definite</text>
+
+  <!-- White checkmark (slightly reduced opacity) overlaid on the D -->
+  <text x="8" y="47"
+        font-family="'Arial Black','Helvetica Neue',Arial,sans-serif"
+        font-size="31" font-weight="900" fill="#ffffff" fill-opacity="0.88">&#10003;</text>
+
+  <!-- ASSURANCE subtext — white with reduced opacity -->
+  <text x="2" y="67"
+        font-family="Arial,Helvetica,sans-serif"
+        font-size="11.5" font-weight="700" fill="#ffffff" fill-opacity="0.72"
+        letter-spacing="4.7">ASSURANCE</text>
+</svg>
