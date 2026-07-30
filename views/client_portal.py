@@ -1,4 +1,4 @@
-"""Client (Policyholder) Portal â FNOL submission, claim tracking, documents."""
+"""Client (Policyholder) Portal Ã¢ÂÂ FNOL submission, claim tracking, documents."""
 from __future__ import annotations
 
 import datetime
@@ -13,11 +13,6 @@ import streamlit as st
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-_WAREHOUSE_ID   = os.environ.get("DATABRICKS_WAREHOUSE_ID", "4489dbff81694cd8")
-_TABLE          = "main.claims.fnol_submissions"
-_ASSIGNMENTS    = "main.claims.assignments"
-_STATUS_HISTORY = "main.claims.status_history"
-_MESSAGES       = "main.claims.client_messages"
 
 
 # ---------------------------------------------------------------------------
@@ -26,21 +21,9 @@ _MESSAGES       = "main.claims.client_messages"
 
 @st.cache_data(ttl=30, show_spinner=False)
 def _fetch_claim(claim_ref: str) -> dict | None:
-    """Fetch one claim row from Delta (30-s cache). Returns {}, None, or dict."""
+    """Fetch one claim row from SQLite (30-s cache). Returns {}, None, or dict."""
     try:
-        w = WorkspaceClient()
-        resp = w.statement_execution.execute_statement(
-            warehouse_id=_WAREHOUSE_ID,
-            statement=f"SELECT * FROM {_TABLE} WHERE claim_ref = :ref",
-            parameters=[StatementParameterListItem(name="ref", value=claim_ref)],
-            wait_timeout="30s",
-        )
-        if resp.status.state != StatementState.SUCCEEDED:
-            return None
-        if not resp.result or not resp.result.data_array:
-            return {}
-        cols = [c.name for c in resp.manifest.schema.columns]
-        return dict(zip(cols, resp.result.data_array[0]))
+        return core_api.get_claim(claim_ref) or {}
     except Exception:  # noqa: BLE001
         return None
 
@@ -49,116 +32,16 @@ def _fetch_claim(claim_ref: str) -> dict | None:
 def _fetch_assignments(claim_ref: str) -> list[dict]:
     """Fetch all expert assignments for a claim (30-s cache)."""
     try:
-        w = WorkspaceClient()
-        resp = w.statement_execution.execute_statement(
-            warehouse_id=_WAREHOUSE_ID,
-            statement=f"""
-                SELECT
-                    expert_type,
-                    expert_name,
-                    COALESCE(expert_phone, '')       AS expert_phone,
-                    CAST(assigned_at AS STRING)      AS assigned_at,
-                    CAST(sla_deadline AS STRING)     AS sla_deadline,
-                    assignment_status,
-                    CASE
-                      WHEN assignment_status = 'Active'
-                       AND CURRENT_TIMESTAMP() > sla_deadline     THEN 'pending'
-                      WHEN assignment_status = 'Active'
-                       AND CURRENT_TIMESTAMP() > sla_deadline
-                             - INTERVAL 4 HOURS                   THEN 'due_soon'
-                      WHEN assignment_status = 'Active'           THEN 'on_track'
-                      ELSE assignment_status
-                    END AS sla_state
-                FROM {_ASSIGNMENTS}
-                WHERE claim_ref = :ref
-                ORDER BY assigned_at DESC
-            """,
-            parameters=[StatementParameterListItem(name="ref", value=claim_ref)],
-            wait_timeout="30s",
-        )
-        if resp.status.state != StatementState.SUCCEEDED:
-            return []
-        if not resp.result or not resp.result.data_array:
-            return []
-        cols = [c.name for c in resp.manifest.schema.columns]
-        return [dict(zip(cols, row)) for row in resp.result.data_array]
+        return core_api.get_assignments(claim_ref) or []
     except Exception:  # noqa: BLE001
         return []
 
 
 @st.cache_data(ttl=30, show_spinner=False)
 def _fetch_timeline(claim_ref: str) -> list[dict]:
-    """Build a unified chronological timeline for a claim.
-
-    Sources (UNION ALL, chronologically sorted):
-      A. main.claims.status_history  â explicit recorded status changes
-      B. main.claims.fnol_submissions â submission seed (only when A has no
-         'Submitted' entry, for backward-compat with pre-history claims)
-      C. main.claims.assignments     â expert assignment events
-    """
+    """Build a unified chronological timeline for a claim from SQLite."""
     try:
-        w = WorkspaceClient()
-        resp = w.statement_execution.execute_statement(
-            warehouse_id=_WAREHOUSE_ID,
-            statement=f"""
-                SELECT event_time, event_type, title, actor, note
-                FROM (
-
-                  -- A: Explicit status history (populated going forward)
-                  SELECT
-                    CAST(sh.changed_at AS STRING)                          AS event_time,
-                    'status_change'                                        AS event_type,
-                    CONCAT('Status \u2192 ', sh.to_status)                 AS title,
-                    COALESCE(sh.changed_by, sh.source, 'System')          AS actor,
-                    COALESCE(sh.note, '')                                  AS note
-                  FROM {_STATUS_HISTORY} sh
-                  WHERE sh.claim_ref = :ref
-
-                  UNION ALL
-
-                  -- B: Submission seed for pre-history claims (backward compat)
-                  SELECT
-                    CAST(f.submitted_at AS STRING)                        AS event_time,
-                    'submission'                                           AS event_type,
-                    'Claim Submitted'                                      AS title,
-                    COALESCE(f.submitted_by, 'Client')                    AS actor,
-                    CONCAT(f.incident_type,
-                      IF(f.incident_location IS NOT NULL
-                           AND f.incident_location != '',
-                         CONCAT(' \u00b7 ', f.incident_location), ''))   AS note
-                  FROM {_TABLE} f
-                  WHERE f.claim_ref = :ref
-                    AND NOT EXISTS (
-                        SELECT 1 FROM {_STATUS_HISTORY} sh2
-                        WHERE sh2.claim_ref = :ref
-                          AND sh2.to_status = 'Submitted'
-                    )
-
-                  UNION ALL
-
-                  -- C: Expert assignments (always shown as distinct events)
-                  SELECT
-                    CAST(a.assigned_at AS STRING)                         AS event_time,
-                    'assignment'                                           AS event_type,
-                    CONCAT(a.expert_type, ' Assigned')                    AS title,
-                    a.expert_name                                         AS actor,
-                    IF(a.expert_phone IS NOT NULL AND a.expert_phone != '',
-                       CONCAT('\U0001f4de ', a.expert_phone), '')         AS note
-                  FROM {_ASSIGNMENTS} a
-                  WHERE a.claim_ref = :ref
-
-                ) t
-                ORDER BY event_time ASC
-            """,
-            parameters=[StatementParameterListItem(name="ref", value=claim_ref)],
-            wait_timeout="30s",
-        )
-        if resp.status.state != StatementState.SUCCEEDED:
-            return []
-        if not resp.result or not resp.result.data_array:
-            return []
-        cols = [c.name for c in resp.manifest.schema.columns]
-        return [dict(zip(cols, row)) for row in resp.result.data_array]
+        return core_api.get_timeline(claim_ref) or []
     except Exception:  # noqa: BLE001
         return []
 
@@ -175,33 +58,16 @@ def _send_expert_message(
     subject: str,
     body: str,
 ) -> bool:
-    """INSERT one row into main.claims.client_messages."""
-    msg_id = "MSG-" + datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
+    """INSERT one row into client_messages via SQLite."""
     try:
-        w = WorkspaceClient()
-        resp = w.statement_execution.execute_statement(
-            warehouse_id=_WAREHOUSE_ID,
-            statement=f"""
-                INSERT INTO {_MESSAGES} (
-                    message_id, claim_ref, sent_at, sent_by,
-                    recipient_type, recipient_name, subject, body, status
-                ) VALUES (
-                    :mid, :cref, CURRENT_TIMESTAMP(), :sby,
-                    :rtype, :rname, :subj, :body, 'Sent'
-                )
-            """,
-            parameters=[
-                StatementParameterListItem(name="mid",   value=msg_id),
-                StatementParameterListItem(name="cref",  value=claim_ref),
-                StatementParameterListItem(name="sby",   value=sent_by       or ""),
-                StatementParameterListItem(name="rtype", value=recipient_type or ""),
-                StatementParameterListItem(name="rname", value=recipient_name or ""),
-                StatementParameterListItem(name="subj",  value=subject        or ""),
-                StatementParameterListItem(name="body",  value=body),
-            ],
-            wait_timeout="30s",
-        )
-        return resp.status.state == StatementState.SUCCEEDED
+        return core_api.send_message(
+            claim_ref=claim_ref,
+            sent_by=sent_by,
+            recipient_type=recipient_type,
+            recipient_name=recipient_name,
+            subject=subject,
+            body=body,
+        ) is not None
     except Exception:  # noqa: BLE001
         return False
 
@@ -228,55 +94,28 @@ def _db_write_fnol(
     """Insert one FNOL row and seed the status_history with 'Submitted'."""
     claim_ref = "CLM-" + datetime.datetime.utcnow().strftime("%Y%m%d%H%M%S%f")[:18]
 
-    sql = f"""
-        INSERT INTO {_TABLE} (
-            claim_ref, submitted_at, submitted_by,
-            policy_number, id_number, vehicle_reg, phone,
-            incident_date, incident_time, incident_location, incident_type, description,
-            third_party, tp_vehicle_reg, tp_driver_name, tp_phone, tp_insurer,
-            police_station, ob_number,
-            status, dpa_consent, consent_ts
-        ) VALUES (
-            :claim_ref, current_timestamp(), :submitted_by,
-            :policy_number, :id_number, :vehicle_reg, :phone,
-            :incident_date, :incident_time, :incident_location, :incident_type, :description,
-            :third_party, :tp_vehicle_reg, :tp_driver_name, :tp_phone, :tp_insurer,
-            :police_station, :ob_number,
-            'Submitted', true, current_timestamp()
-        )
-    """
-    params = [
-        StatementParameterListItem(name="claim_ref",         value=claim_ref),
-        StatementParameterListItem(name="submitted_by",      value=submitted_by),
-        StatementParameterListItem(name="policy_number",     value=policy_number),
-        StatementParameterListItem(name="id_number",         value=id_number),
-        StatementParameterListItem(name="vehicle_reg",       value=vehicle_reg),
-        StatementParameterListItem(name="phone",             value=phone),
-        StatementParameterListItem(name="incident_date",     value=str(incident_date)),
-        StatementParameterListItem(name="incident_time",     value=incident_time),
-        StatementParameterListItem(name="incident_location", value=incident_location),
-        StatementParameterListItem(name="incident_type",     value=incident_type),
-        StatementParameterListItem(name="description",       value=description),
-        StatementParameterListItem(name="third_party",       value=str(third_party).lower(),
-                                   type="BOOLEAN"),
-        StatementParameterListItem(name="tp_vehicle_reg",    value=tp_vehicle_reg  or ""),
-        StatementParameterListItem(name="tp_driver_name",    value=tp_driver_name  or ""),
-        StatementParameterListItem(name="tp_phone",          value=tp_phone        or ""),
-        StatementParameterListItem(name="tp_insurer",        value=tp_insurer      or ""),
-        StatementParameterListItem(name="police_station",    value=police_station  or ""),
-        StatementParameterListItem(name="ob_number",         value=ob_number       or ""),
-    ]
-
-    w = WorkspaceClient()
-    resp = w.statement_execution.execute_statement(
-        warehouse_id=_WAREHOUSE_ID,
-        statement=sql,
-        parameters=params,
-        wait_timeout="30s",
+    ok = core_api.create_claim(
+        claim_ref=claim_ref,
+        policy_number=policy_number,
+        id_number=id_number,
+        vehicle_reg=vehicle_reg,
+        phone=phone,
+        incident_date=str(incident_date),
+        incident_time=incident_time,
+        incident_location=incident_location,
+        incident_type=incident_type,
+        description=description,
+        third_party=third_party,
+        tp_vehicle_reg=tp_vehicle_reg,
+        tp_driver_name=tp_driver_name,
+        tp_phone=tp_phone,
+        tp_insurer=tp_insurer,
+        police_station=police_station,
+        ob_number=ob_number,
+        submitted_by=submitted_by,
     )
-    if resp.status.state != StatementState.SUCCEEDED:
-        err = resp.status.error.message if resp.status.error else str(resp.status.state)
-        raise RuntimeError(f"Delta insert failed: {err}")
+    if not ok:
+        raise RuntimeError("SQLite insert failed")
 
     # Seed the status_history so the timeline starts from day one
     core_api.record_status_change(
@@ -285,7 +124,7 @@ def _db_write_fnol(
         from_status="",
         changed_by=submitted_by,
         source="portal",
-        note=f"{incident_type} \u00b7 {incident_location}",
+        note=f"{incident_type} · {incident_location}",
     )
 
     return claim_ref
@@ -525,7 +364,7 @@ def _fnol_form() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Claim Tracker â shared constants
+# Claim Tracker Ã¢ÂÂ shared constants
 # ---------------------------------------------------------------------------
 
 STATUS_STAGES = [
@@ -541,7 +380,7 @@ _EXPERT_ICONS = {
 
 
 # ---------------------------------------------------------------------------
-# Contact Expert dialog  (module-level â required by @st.dialog)
+# Contact Expert dialog  (module-level Ã¢ÂÂ required by @st.dialog)
 # ---------------------------------------------------------------------------
 
 @st.dialog("\U0001f4de Contact Expert", width="small")
@@ -552,7 +391,7 @@ def _contact_dialog(expert: dict, claim_ref: str, user_email: str) -> None:
     ephone = (expert.get("expert_phone") or "").strip()
     icon   = _EXPERT_ICONS.get(etype, "\U0001f464")
 
-    # ââ Header card ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # Ã¢ÂÂÃ¢ÂÂ Header card Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
     st.markdown(
         f"<div style='text-align:center;font-size:3em;padding-bottom:2px'>{icon}</div>"
         f"<div style='text-align:center;font-size:1.2em;font-weight:700'>{ename}</div>"
@@ -561,7 +400,7 @@ def _contact_dialog(expert: dict, claim_ref: str, user_email: str) -> None:
     )
     st.divider()
 
-    # ââ Phone / tap-to-call ââââââââââââââââââââââââââââââââââââââââââââââââ
+    # Ã¢ÂÂÃ¢ÂÂ Phone / tap-to-call Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
     if ephone:
         st.markdown(
             f"<div style='text-align:center;padding:10px 0 6px'>"
@@ -587,7 +426,7 @@ def _contact_dialog(expert: dict, claim_ref: str, user_email: str) -> None:
 
     st.divider()
 
-    # ââ Message form âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # Ã¢ÂÂÃ¢ÂÂ Message form Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
     st.markdown("**\U0001f4ac Send a Message**")
     st.caption("Your message will be logged and relayed by your claims officer.")
 
@@ -657,7 +496,7 @@ def _claim_tracker() -> None:
         )
         return
 
-    # ââ KPI metrics ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # Ã¢ÂÂÃ¢ÂÂ KPI metrics Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
     raw_status = claim.get("status", "Submitted")
     inc_type   = claim.get("incident_type", "\u2014")
     date_rep   = str(claim.get("incident_date") or claim.get("submitted_at") or "\u2014")[:10]
@@ -668,7 +507,7 @@ def _claim_tracker() -> None:
     c2.metric("Incident Type",  inc_type)
     c3.metric("Date Reported",  date_rep)
 
-    # ââ Progress bar âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # Ã¢ÂÂÃ¢ÂÂ Progress bar Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
     st.markdown("##### Progress")
     try:
         cur_idx = STATUS_STAGES.index(raw_status)
@@ -683,7 +522,7 @@ def _claim_tracker() -> None:
             unsafe_allow_html=True,
         )
 
-    # ââ Your Claim Team ââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # Ã¢ÂÂÃ¢ÂÂ Your Claim Team Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
     st.divider()
     st.markdown("##### Your Claim Team")
     visible = [e for e in experts if e.get("assignment_status") != "Replaced"]
@@ -744,7 +583,7 @@ def _claim_tracker() -> None:
                             user_email=st.session_state.get("user", ""),
                         )
 
-    # ââ Payment Status âââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # Ã¢ÂÂÃ¢ÂÂ Payment Status Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
     st.divider()
     st.markdown("##### Payment Status")
     if payment is None or not core_api.is_configured():
@@ -762,12 +601,12 @@ def _claim_tracker() -> None:
         pc2.metric("Amount (KES)",   f"{float(payment.get('amount', 0)):,.2f}")
         pc3.metric("Payment Date",   payment.get("payment_date", "\u2014"))
 
-    # ââ Timeline âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # Ã¢ÂÂÃ¢ÂÂ Timeline Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
     st.divider()
     with st.expander("\U0001f4c5 Claim Timeline", expanded=True):
         _render_timeline(events)
 
-    # ââ Refresh ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # Ã¢ÂÂÃ¢ÂÂ Refresh Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
     col_r, col_cap = st.columns([1, 5])
     if col_r.button("\U0001f504 Refresh", key="tracker_refresh"):
         _fetch_claim.clear()        # type: ignore[attr-defined]
