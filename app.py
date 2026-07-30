@@ -9,12 +9,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 st.set_page_config(
     page_title="Definite Assurance | Claims Portal",
-    page_icon="Ã¢ÂÂ",
+    page_icon="ÃÂ¢ÃÂÃÂ",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Brand identity Ã¢ÂÂ must run right after set_page_config
+# Brand identity ÃÂ¢ÃÂÃÂ must run right after set_page_config
 from views.brand import (  # noqa: E402
     inject_brand_css,
     brand_strip,
@@ -55,7 +55,6 @@ DEMO_ACCOUNTS: dict[str, dict] = {
     "spares@insure.demo":       {"password": "Catalog#99",   "role": "spare_parts"},
     "legal@insure.demo":        {"password": "Counsel#99",   "role": "legal"},
     "admin@insure.demo":        {"password": "SysCtrl#99",   "role": "admin"},
-    "super@insure.demo":        {"password": "Super#99",      "role": "super_admin"},
 }
 
 
@@ -81,8 +80,8 @@ def show_login() -> None:
                 st.error("Invalid email or password.")
             else:
                 # TODO: Replace this stub with your real auth flow:
-                #   - IMS REST API  Ã¢ÂÂ  POST /api/auth/login
-                #   - Okta / Azure AD SSO  Ã¢ÂÂ  OIDC redirect
+                #   - IMS REST API  ÃÂ¢ÃÂÃÂ  POST /api/auth/login
+                #   - Okta / Azure AD SSO  ÃÂ¢ÃÂÃÂ  OIDC redirect
                 #   - OTP via Africa's Talking / Twilio
                 acct = DEMO_ACCOUNTS[identifier]
                 st.session_state.update(
