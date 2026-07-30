@@ -8,12 +8,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 st.set_page_config(
     page_title="Definite Assurance | Claims Portal",
-    page_icon="✔",
+    page_icon="â",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Brand identity — must run right after set_page_config
+# Brand identity â must run right after set_page_config
 from views.brand import (  # noqa: E402
     inject_brand_css,
     brand_strip,
@@ -79,8 +79,8 @@ def show_login() -> None:
                 st.error("Invalid email or password.")
             else:
                 # TODO: Replace this stub with your real auth flow:
-                #   - IMS REST API  →  POST /api/auth/login
-                #   - Okta / Azure AD SSO  →  OIDC redirect
+                #   - IMS REST API  â  POST /api/auth/login
+                #   - Okta / Azure AD SSO  â  OIDC redirect
                 #   - OTP via Africa's Talking / Twilio
                 acct = DEMO_ACCOUNTS[identifier]
                 st.session_state.update(
