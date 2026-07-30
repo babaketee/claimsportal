@@ -245,6 +245,7 @@ def _financial_reports() -> None:
     if st.button("Generate Report", type="primary", use_container_width=True):
         st.info(f"Generating **{report}** for **{period}** … Connect Delta tables for live output.")
 
+
 def show() -> None:
     if 'process_settlement_id' in st.session_state:
         _process_payment(st.session_state['process_settlement_id'], st.session_state['process_claim_ref'])
