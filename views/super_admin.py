@@ -1,4 +1,4 @@
-"""Super Admin ÃÂ¢ÃÂÃÂ full system configuration, user management, API setup."""
+"""Super Admin ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ full system configuration, user management, API setup."""
 
 import streamlit as st
 import pandas as pd
@@ -13,7 +13,7 @@ except Exception:
 
 def show() -> None:
     st.header("System Administration")
-    st.caption("Super Administrator ÃÂ¢ÃÂÃÂ full system access")
+    st.caption("Super Administrator ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ full system access")
 
     tab_users, tab_roles, tab_api, tab_views, tab_audit, tab_config = st.tabs([
         "User Management",
@@ -85,7 +85,7 @@ def show() -> None:
     with tab_roles:
         st.subheader("Role Configuration")
         ROLES = {
-            "client": {"description": "Policy holder ÃÂ¢ÃÂÃÂ submit FNOL, track claims", "views": ["FNOL", "Claim Tracker", "Documents"]},
+            "client": {"description": "Policy holder ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ submit FNOL, track claims", "views": ["FNOL", "Claim Tracker", "Documents"]},
             "claims_officer": {"description": "Handle FNOL, assign experts, set reserves", "views": ["My Claims", "Assign Experts", "Reserve Mgmt", "Settlement", "Correspondance"]},
             "head_of_claims": {"description": "Oversee all claims, approve settlements, SLA", "views": ["Dashboard", "Pending Approvals", "SLA Tracker", "All Claims"]},
             "finance": {"description": "Process payments, manage disbursements", "views": ["Payment Dashboard", "Process Payment", "Reports"]},
@@ -121,22 +121,22 @@ def show() -> None:
         with st.form(key="api_config_form"):
             st.markdown("**Core Policy/Claims API**")
             core_base = st.text_input("CORE_API_BASE_URL", value=get_env("CORE_API_BASE_URL", ""), placeholder="https://api.core-system.example.com")
-            core_key = st.text_input("CORE_API_KEY", value="ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢", type="password", placeholder="Enter API key")
+            core_key = st.text_input("CORE_API_KEY", value="ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢", type="password", placeholder="Enter API key")
             st.markdown("**Analytics DB (Databricks or any SQLAlchemy DB)**")
             analyt_host = st.text_input("ANALYTICS_SQL_HOST", value=get_env("ANALYTICS_SQL_HOST", ""), placeholder="e.g.adb-xxx.databricks.net")
-            analyt_token = st.text_input("ANALYTICS_SQL_TOKEN", value="ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢", type="password", placeholder="Databricks token or SQLAlchemy connection string")
+            analyt_token = st.text_input("ANALYTICS_SQL_TOKEN", value="ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢", type="password", placeholder="Databricks token or SQLAlchemy connection string")
             analyt_wh = st.text_input("ANALYTICS_SQL_WAREHOUSE_ID", value=get_env("ANALYTICS_SQL_WAREHOUSE_ID", ""), placeholder="Warehouse ID")
             analyt_conn = st.text_input("ANALYTICS_SQL_CONNECTION_STRING", value=get_env("ANALYTICS_SQL_CONNECTION_STRING", ""), placeholder="postgresql://user:pass@host:5432/db")
             st.markdown("**SMS Notification (Africastalking)**")
             sms_user = st.text_input("AFRICAS_TALKING_USERNAME", value=get_env("AFRICAS_TALKING_USERNAME", ""), placeholder="sandbox")
-            sms_key = st.text_input("AFRICAS_TALKING_API_KEY", value="ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢", type="password")
+            sms_key = st.text_input("AFRICAS_TALKING_API_KEY", value="ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢", type="password")
             st.markdown("**M-Pesa Payment Gateway**")
             mpesa_consumer = st.text_input("M_PESA_CONSUMER_KEY", value=get_env("M_PESA_CONSUMER_KEY", ""))
-            mpesa_secret = st.text_input("M_PESA_CONSUMER_SECRET", value="ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢ÃÂ¢ÃÂÃÂ¢", type="password")
+            mpesa_secret = st.text_input("M_PESA_CONSUMER_SECRET", value="ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ¢", type="password")
             mpesa_shortcode = st.text_input("M_PESA_SHORTCODE", value=get_env("M_PESA_SHORTCODE", ""))
             submitted = st.form_submit_button("Save API Configuration")
             if submitted:
-                st.success("API configuration saved to .env ÃÂ¢ÃÂÃÂ restart app to apply.")
+                st.success("API configuration saved to .env ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ restart app to apply.")
                 st.info("In production: write to a secure secrets manager, never commit .env.")
 
         st.markdown("**Test Connections**")
@@ -146,7 +146,7 @@ def show() -> None:
                 if core_base:
                     st.info("Would test: " + core_base + "/health")
                 else:
-                    st.warning("CORE_API_BASE_URL not configured ÃÂ¢ÃÂÃÂ using demo mode.")
+                    st.warning("CORE_API_BASE_URL not configured ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ using demo mode.")
         with col2:
             if st.button("Test Analytics DB"):
                 st.info("Would run: SELECT 1 on analytics DB.")
@@ -175,7 +175,7 @@ def show() -> None:
             "admin": {"Admin Dashboard", "Analytics", "Reports"},
         }
         for role in ROLES_LIST:
-            with st.expander(role.toUpperCase() + " ÃÂ¢ÃÂÃÂ " + PERMS.get(role, new Set()).size + " view(s) allowed", expanded=False):
+            with st.expander(role.toUpperCase() + " ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ " + PERMS.get(role, new Set()).size + " view(s) allowed", expanded=False):
                 allowed = PERMS.get(role, new Set())
                 for view in VIEWS:
                     col1, col2 = st.columns([4, 1])
@@ -226,7 +226,7 @@ def show() -> None:
                 wht_spare_parts = st.number_input("Spare Parts WHT Rate (%)", value=10, min_value=0, max_value=20)
             submitted = st.form_submit_button("Save Business Rules")
             if submitted:
-                st.success("Business rules saved ÃÂ¢ÃÂÃÂ SLA, reinsurance, WHT, and approval limits updated.")
+                st.success("Business rules saved ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ SLA, reinsurance, WHT, and approval limits updated.")
 
         st.markdown("**Database Management**")
         col1, col2, col3 = st.columns(3)
