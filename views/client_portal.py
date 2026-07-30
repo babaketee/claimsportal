@@ -1,4 +1,4 @@
-"""Client (Policyholder) Portal — FNOL submission, claim tracking, documents."""
+"""Client (Policyholder) Portal â FNOL submission, claim tracking, documents."""
 from __future__ import annotations
 
 import datetime
@@ -9,8 +9,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import core_api  # noqa: E402
 
 import streamlit as st
-from databricks.sdk import WorkspaceClient
-from databricks.sdk.service.sql import StatementParameterListItem, StatementState
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -93,10 +91,10 @@ def _fetch_timeline(claim_ref: str) -> list[dict]:
     """Build a unified chronological timeline for a claim.
 
     Sources (UNION ALL, chronologically sorted):
-      A. main.claims.status_history  — explicit recorded status changes
-      B. main.claims.fnol_submissions — submission seed (only when A has no
+      A. main.claims.status_history  â explicit recorded status changes
+      B. main.claims.fnol_submissions â submission seed (only when A has no
          'Submitted' entry, for backward-compat with pre-history claims)
-      C. main.claims.assignments     — expert assignment events
+      C. main.claims.assignments     â expert assignment events
     """
     try:
         w = WorkspaceClient()
@@ -527,7 +525,7 @@ def _fnol_form() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Claim Tracker — shared constants
+# Claim Tracker â shared constants
 # ---------------------------------------------------------------------------
 
 STATUS_STAGES = [
@@ -543,7 +541,7 @@ _EXPERT_ICONS = {
 
 
 # ---------------------------------------------------------------------------
-# Contact Expert dialog  (module-level — required by @st.dialog)
+# Contact Expert dialog  (module-level â required by @st.dialog)
 # ---------------------------------------------------------------------------
 
 @st.dialog("\U0001f4de Contact Expert", width="small")
@@ -554,7 +552,7 @@ def _contact_dialog(expert: dict, claim_ref: str, user_email: str) -> None:
     ephone = (expert.get("expert_phone") or "").strip()
     icon   = _EXPERT_ICONS.get(etype, "\U0001f464")
 
-    # ── Header card ────────────────────────────────────────────────────────
+    # ââ Header card ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
     st.markdown(
         f"<div style='text-align:center;font-size:3em;padding-bottom:2px'>{icon}</div>"
         f"<div style='text-align:center;font-size:1.2em;font-weight:700'>{ename}</div>"
@@ -563,7 +561,7 @@ def _contact_dialog(expert: dict, claim_ref: str, user_email: str) -> None:
     )
     st.divider()
 
-    # ── Phone / tap-to-call ────────────────────────────────────────────────
+    # ââ Phone / tap-to-call ââââââââââââââââââââââââââââââââââââââââââââââââ
     if ephone:
         st.markdown(
             f"<div style='text-align:center;padding:10px 0 6px'>"
@@ -589,7 +587,7 @@ def _contact_dialog(expert: dict, claim_ref: str, user_email: str) -> None:
 
     st.divider()
 
-    # ── Message form ───────────────────────────────────────────────────────
+    # ââ Message form âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
     st.markdown("**\U0001f4ac Send a Message**")
     st.caption("Your message will be logged and relayed by your claims officer.")
 
@@ -659,7 +657,7 @@ def _claim_tracker() -> None:
         )
         return
 
-    # ── KPI metrics ────────────────────────────────────────────────────────
+    # ââ KPI metrics ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
     raw_status = claim.get("status", "Submitted")
     inc_type   = claim.get("incident_type", "\u2014")
     date_rep   = str(claim.get("incident_date") or claim.get("submitted_at") or "\u2014")[:10]
@@ -670,7 +668,7 @@ def _claim_tracker() -> None:
     c2.metric("Incident Type",  inc_type)
     c3.metric("Date Reported",  date_rep)
 
-    # ── Progress bar ───────────────────────────────────────────────────────
+    # ââ Progress bar âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
     st.markdown("##### Progress")
     try:
         cur_idx = STATUS_STAGES.index(raw_status)
@@ -685,7 +683,7 @@ def _claim_tracker() -> None:
             unsafe_allow_html=True,
         )
 
-    # ── Your Claim Team ────────────────────────────────────────────────────
+    # ââ Your Claim Team ââââââââââââââââââââââââââââââââââââââââââââââââââââ
     st.divider()
     st.markdown("##### Your Claim Team")
     visible = [e for e in experts if e.get("assignment_status") != "Replaced"]
@@ -746,7 +744,7 @@ def _claim_tracker() -> None:
                             user_email=st.session_state.get("user", ""),
                         )
 
-    # ── Payment Status ─────────────────────────────────────────────────────
+    # ââ Payment Status âââââââââââââââââââââââââââââââââââââââââââââââââââââ
     st.divider()
     st.markdown("##### Payment Status")
     if payment is None or not core_api.is_configured():
@@ -764,12 +762,12 @@ def _claim_tracker() -> None:
         pc2.metric("Amount (KES)",   f"{float(payment.get('amount', 0)):,.2f}")
         pc3.metric("Payment Date",   payment.get("payment_date", "\u2014"))
 
-    # ── Timeline ───────────────────────────────────────────────────────────
+    # ââ Timeline âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
     st.divider()
     with st.expander("\U0001f4c5 Claim Timeline", expanded=True):
         _render_timeline(events)
 
-    # ── Refresh ────────────────────────────────────────────────────────────
+    # ââ Refresh ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
     col_r, col_cap = st.columns([1, 5])
     if col_r.button("\U0001f504 Refresh", key="tracker_refresh"):
         _fetch_claim.clear()        # type: ignore[attr-defined]
