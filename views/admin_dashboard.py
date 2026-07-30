@@ -1,4 +1,4 @@
-"""Internal Admin Dashboard â live Delta data from main.claims.fnol_submissions."""
+"""Internal Admin Dashboard Ã¢ÂÂ live Delta data from main.claims.fnol_submissions."""
 from __future__ import annotations
 
 import datetime
@@ -8,8 +8,7 @@ import pandas as pd
 import streamlit as st
 from views.analytics_charts import render_analytics, clear_cache as _clear_analytics_cache
 
-_WAREHOUSE_ID = os.environ.get("DATABRICKS_WAREHOUSE_ID", "4489dbff81694cd8")
-_FNOL = "main.claims.fnol_submissions"
+_FNOL = None  # SQLite-backed
 
 
 # ---------------------------------------------------------------------------
@@ -17,22 +16,8 @@ _FNOL = "main.claims.fnol_submissions"
 # ---------------------------------------------------------------------------
 
 def _run_sql(sql: str) -> pd.DataFrame:
-    """Run SQL on the configured warehouse and return a DataFrame.
-
-    Returns an empty DataFrame on error; surfaces warnings in the UI so the
-    dashboard degrades gracefully when tables are unavailable.
-    """
-    try:
-        w = WorkspaceClient()
-        resp = w.statement_execution.execute_statement(
-            warehouse_id=_WAREHOUSE_ID,
-            statement=sql,
-            wait_timeout="30s",
-        )
-        if resp.status.state != StatementState.SUCCEEDED:
-            err = resp.status.error.message if resp.status.error else str(resp.status.state)
-            st.warning(f"Query returned non-success state: {err}")
-            return pd.DataFrame()
+    # Deprecated — Delta warehouse removed. Dashboard degrades gracefully.
+    return pd.DataFrame()
         if not resp.result or not resp.result.data_array:
             return pd.DataFrame()
         cols = [c.name for c in resp.manifest.schema.columns]
