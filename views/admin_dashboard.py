@@ -1,12 +1,8 @@
-import sqlite3
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date
 
-DB_PATH = "claims_history.db"
-
-def _get_db():
-    return sqlite3.connect(DB_PATH)
+from core_api import _get_db
 
 def _metric_card(label, value, delta=None):
     st.metric(label, value, delta=delta)
