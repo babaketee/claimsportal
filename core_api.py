@@ -1,11 +1,10 @@
-import os, sqlite3, random
+import sqlite3, random
 from datetime import datetime
 from typing import Optional
 
 _DB_PATH = "claims_history.db"
 
 def _get_db():
-    """Connect to SQLite — the only reliable local store for Streamlit Cloud."""
     return sqlite3.connect(_DB_PATH)
 
 def _ensure_tables():
@@ -256,7 +255,6 @@ def get_timeline(claim_ref):
     return rows
 
 def seed_demo_data():
-    """Seed 45 Kenyan claims. Motor (MTR) + Business (BSN)."""
     _ensure_tables()
     conn = _get_db()
     cur = conn.cursor()
@@ -266,7 +264,6 @@ def seed_demo_data():
         conn.close()
         return "Already seeded"
     cur.close()
-
     motor = [
         ("MTR-2026-0001","client@insure.demo","Motor Comprehensive","Kenya Direct","Bodily Injury","Reported - Under Investigation","Nairobi","KBA 123A"),
         ("MTR-2026-0002","client@insure.demo","Motor Comprehensive","Kenya Direct","Third Party Only","Reserve Set - Pending Assessment","Mombasa","KBB 456B"),
@@ -316,23 +313,16 @@ def seed_demo_data():
         ("BSN-2026-0019","garage@insure.demo","Business Insurance","First Assurance","Theft","Reserve Set - Pending Assessment","Kisumu","OFF-019"),
         ("BSN-2026-0020","investigator@insure.demo","Business Insurance","Kenya Direct","Burglary","Reported - Under Investigation","Nairobi","OFF-020"),
     ]
-
     now = "2026-07-30 12:00:00"
     conn = _get_db()
     cur = conn.cursor()
-
     for c in motor + business:
         cur.execute("INSERT INTO claims_history (claim_ref, client, claim_type, insurer, claim_cause, status, location, vehicle_reg, date_filed, last_updated) VALUES (?,?,?,?,?,?,?,?,?,?)", (*c, now, now))
-
     for c in motor + business:
         cur.execute("INSERT INTO reserves (claim_ref, reserve_amount, amount_paid, reserve_type, reason, status, set_by, set_date) VALUES (?,?,0,'Initial Reserve','Claim assessment','Active','system',?)", (c[0], random.randint(50000, 500000), now))
-
     for c in motor + business:
         cur.execute("INSERT INTO status_history (claim_ref, action, user_email, timestamp, notes) VALUES (?,'Claim Reported','system',?,'Initial claim registration')", (c[0], now))
-
     conn.commit()
     cur.close()
     conn.close()
     return "Seeded 45 claims"
-
-# NOTE: seed_demo_data() is NOT called on import — call it manually from Super Admin > System Config
