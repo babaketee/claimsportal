@@ -51,24 +51,14 @@ def _assigned_claims(role: str) -> None:
     expert_type = role
     st.subheader("My Assigned Jobs")
 
-    # Attempt real data fetch via core_api, fall back to demo data
-    demo_jobs = [
-        {"claim_ref": "CLM-20250615-002", "expert_type": "assessor", "status": "in_progress", "assigned_at": "2025-06-16", "claim_type": "Motor Bumper", "vehicle": "KCA 123A", "estimated_cost": 45000},
-        {"claim_ref": "CLM-20250701-001", "expert_type": "garage", "status": "pending", "assigned_at": "2025-07-02", "claim_type": "Windscreen", "vehicle": "KBZ 456B", "estimated_cost": 32000},
-        {"claim_ref": "CLM-20250620-006", "expert_type": "assessor", "status": "completed", "assigned_at": "2025-06-21", "claim_type": "Third Party", "vehicle": "KC 789C", "estimated_cost": 85000},
-    ]
-
     if core_api.is_configured():
         try:
-            # Real: fetch assignments from core_api filtered by expert_type + provider
             assignments = core_api.get_assignments(expert_type=expert_type)
-            # assignments is a list of dicts with at least claim_ref, status, assigned_at, claim_type, vehicle, estimated_cost
             my_jobs = assignments if assignments else []
         except Exception:
-            my_jobs = [j for j in demo_jobs if j["expert_type"] == expert_type]
+            my_jobs = []
     else:
-        # Demo mode: filter hardcoded demo data by expert_type
-        my_jobs = [j for j in demo_jobs if j["expert_type"] == expert_type]
+        my_jobs = []
 
     if not my_jobs:
         st.info(f"No {expert_type} jobs assigned to you.")
@@ -215,7 +205,6 @@ def _submit_assessment_report() -> None:
 
 def _approve_estimate() -> None:
     st.subheader("Approve / Reject Garage Estimate")
-    st.info("Review the garage estimate and provide your decision before it is routed to accounts payable.")
     with st.form("approve_estimate"):
         c1, c2 = st.columns(2)
         claim_ref       = c1.text_input("Claim Reference Number *")
@@ -259,7 +248,6 @@ def _approve_estimate() -> None:
 
 def _submit_estimate() -> None:
     st.subheader("Submit Repair Estimate")
-    st.info("Your estimate will be reviewed and approved by an assessor before repair work begins.")
     with st.form("garage_estimate"):
         claim_ref     = st.text_input("Claim Reference Number *")
         c1, c2, c3   = st.columns(3)
@@ -312,7 +300,7 @@ def _request_supplementary() -> None:
         c1, c2 = st.columns(2)
         claim_ref         = c1.text_input("Claim Reference Number *")
         approved_estimate = c2.number_input("Original Approved Estimate (KES)", min_value=0.0, format="%.2f")
-        additional_amount = st.number_input("Additional Amount Requested (KES) *", min_value=0.0, format="%.2f")
+        additional_amount = c1.number_input("Additional Amount Requested (KES) *", min_value=0.0, format="%.2f")
         reason            = st.text_area("Reason for Supplementary Request *", height=100)
         support_docs      = st.file_uploader(
             "Supporting Documents (photos, parts invoices)",
@@ -433,153 +421,31 @@ def _submit_invoice() -> None:
 
 def _payment_status(role: str) -> None:
     st.subheader("Payment Status")
-    st.info("Track the payment status for your submitted invoices and service fees.")
 
-    # TODO: Query Delta table filtered to this provider's ID
-    #   spark.sql("""
-    #     SELECT claim_ref, invoice_number, service_date, amount, status,
-    #            payment_date, payment_reference, notes
-    #     FROM claims.payments
-    #     WHERE provider_id = current_user_id
-    #     ORDER BY service_date DESC
-    #   """)
-
-    if role == "garage":
-        sample = [
-            {
-                "Claim Ref":       "CLM-20250715123456",
-                "Invoice No":      "INV-2025-001",
-                "Invoice Date":    "2025-07-15",
-                "Amount (KES)":    "45,000.00",
-                "Status":          "🟢 Payment Initiated",
-                "Payment Date":    "2025-07-18",
-                "Payment Ref":     "PAY-20250718001",
-                "Notes":           "EFT to Equity Bank",
-            },
-            {
-                "Claim Ref":       "CLM-20250714098765",
-                "Invoice No":      "INV-2025-002",
-                "Invoice Date":    "2025-07-14",
-                "Amount (KES)":    "12,500.00",
-                "Status":          "🔵 Under Review",
-                "Payment Date":    "—",
-                "Payment Ref":     "—",
-                "Notes":           "Awaiting assessor sign-off",
-            },
-            {
-                "Claim Ref":       "CLM-20250710054321",
-                "Invoice No":      "INV-2025-003",
-                "Invoice Date":    "2025-07-10",
-                "Amount (KES)":    "78,200.00",
-                "Status":          "✅ Paid",
-                "Payment Date":    "2025-07-12",
-                "Payment Ref":     "PAY-20250712004",
-                "Notes":           "Full settlement — KCB Bank",
-            },
-            {
-                "Claim Ref":       "CLM-20250705011111",
-                "Invoice No":      "INV-2025-004",
-                "Invoice Date":    "2025-07-05",
-                "Amount (KES)":    "23,800.00",
-                "Status":          "🟠 On Hold",
-                "Payment Date":    "—",
-                "Payment Ref":     "—",
-                "Notes":           "Dispute raised by client",
-            },
-        ]
-        amount_key = "Amount (KES)"
-
-    elif role == "assessor":
-        sample = [
-            {
-                "Claim Ref":       "CLM-20250715123456",
-                "Service":         "Assessment Fee",
-                "Service Date":    "2025-07-15",
-                "Fee (KES)":       "8,000.00",
-                "Status":          "✅ Paid",
-                "Payment Date":    "2025-07-17",
-                "Payment Ref":     "PAY-20250717002",
-                "Notes":           "Standard assessment fee",
-            },
-            {
-                "Claim Ref":       "CLM-20250714098765",
-                "Service":         "Re-assessment Fee",
-                "Service Date":    "2025-07-14",
-                "Fee (KES)":       "5,000.00",
-                "Status":          "🟡 Invoice Received",
-                "Payment Date":    "—",
-                "Payment Ref":     "—",
-                "Notes":           "Awaiting finance approval",
-            },
-            {
-                "Claim Ref":       "CLM-20250709077432",
-                "Service":         "Assessment Fee",
-                "Service Date":    "2025-07-09",
-                "Fee (KES)":       "8,000.00",
-                "Status":          "🔵 Under Review",
-                "Payment Date":    "—",
-                "Payment Ref":     "—",
-                "Notes":           "Finance team processing",
-            },
-        ]
-        amount_key = "Fee (KES)"
-
-    else:  # investigator
-        sample = [
-            {
-                "Claim Ref":       "CLM-20250715123456",
-                "Service":         "Investigation Fee",
-                "Service Date":    "2025-07-15",
-                "Fee (KES)":       "15,000.00",
-                "Status":          "🔵 Under Review",
-                "Payment Date":    "—",
-                "Payment Ref":     "—",
-                "Notes":           "Report under review by claims manager",
-            },
-            {
-                "Claim Ref":       "CLM-20250708012345",
-                "Service":         "Investigation Fee",
-                "Service Date":    "2025-07-08",
-                "Fee (KES)":       "15,000.00",
-                "Status":          "✅ Paid",
-                "Payment Date":    "2025-07-11",
-                "Payment Ref":     "PAY-20250711005",
-                "Notes":           "Settled in full",
-            },
-            {
-                "Claim Ref":       "CLM-20250630099001",
-                "Service":         "Supplementary Investigation",
-                "Service Date":    "2025-06-30",
-                "Fee (KES)":       "8,500.00",
-                "Status":          "✅ Paid",
-                "Payment Date":    "2025-07-03",
-                "Payment Ref":     "PAY-20250703007",
-                "Notes":           "Supplementary fee approved",
-            },
-        ]
-        amount_key = "Fee (KES)"
-
-    st.dataframe(sample, use_container_width=True)
-
-    # Summary metrics
-    st.divider()
-    total_txns = len(sample)
-    paid_count = sum(1 for r in sample if "Paid" in r.get("Status", ""))
-    pending_count = total_txns - paid_count
-    try:
-        paid_amount = sum(
-            float(r[amount_key].replace(",", ""))
-            for r in sample
-            if "Paid" in r.get("Status", "")
-        )
-    except Exception:
-        paid_amount = 0.0
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total Transactions", total_txns)
-    c2.metric("Paid", paid_count)
-    c3.metric("Pending / In Progress", pending_count)
-    c4.metric("Total Paid (KES)", f"{paid_amount:,.2f}")
+    # Fetch real payment data via core_api
+    if core_api.is_configured():
+        try:
+            payment_data = core_api.get_assignments(expert_type=role)
+            if payment_data:
+                st.dataframe(payment_data, use_container_width=True)
+                total_txns = len(payment_data)
+                paid_count = sum(1 for r in payment_data if r.get("status", "").lower() == "paid")
+                pending_count = total_txns - paid_count
+                try:
+                    paid_amount = sum(float(r.get("amount") or r.get("estimated_cost") or 0) for r in payment_data if r.get("status", "").lower() == "paid")
+                except Exception:
+                    paid_amount = 0.0
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("Total Transactions", total_txns)
+                c2.metric("Paid", paid_count)
+                c3.metric("Pending / In Progress", pending_count)
+                c4.metric("Total Paid (KES)", f"{paid_amount:,.2f}")
+            else:
+                st.info(f"No payment records found for your account.")
+        except Exception as e:
+            st.error(f"Failed to load payment status: {e}")
+    else:
+        st.info("Payment tracking is not available in demo mode.")
 
 
 # ---------------------------------------------------------------------------
@@ -588,10 +454,6 @@ def _payment_status(role: str) -> None:
 
 def _submit_investigation_report() -> None:
     st.subheader("Submit Investigation Report")
-    st.info(
-        "This portal contains private claim details. "
-        "Handle all information in accordance with DPA 2019 and your engagement mandate."
-    )
     with st.form("investigation"):
         c1, c2 = st.columns(2)
         claim_ref   = c1.text_input("Claim Reference Number *")
