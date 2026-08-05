@@ -22,10 +22,10 @@ def get_sla_badge(claim_ref: str, submitted_at: str) -> str:
         return "⚪ Invalid date"
 
     today = datetime.now().date()
-    ack_deadline = (submitted + timedelta(days=3)).date()
+    ack_deadline  = (submitted + timedelta(days=3)).date()
     settle_deadline = (submitted + timedelta(days=30)).date()
 
-    ack_days  = (ack_deadline  - today).days
+    ack_days   = (ack_deadline  - today).days
     settle_days = (settle_deadline - today).days
 
     def _colour(days):
@@ -33,8 +33,8 @@ def get_sla_badge(claim_ref: str, submitted_at: str) -> str:
         if days <= 7: return "🟡"
         return "🟢"
 
-    ack_sym  = _colour(ack_days)
-    sett_sym = _colour(settle_days)
+    ack_sym   = _colour(ack_days)
+    sett_sym  = _colour(settle_days)
     return (
         f"<span title='Ack SLA'>{ack_sym} Ack:{ack_days}d</span>&nbsp;"
         f"<span title='Settlement SLA'>{sett_sym} Settle:{settle_days}d</span>"
@@ -53,7 +53,6 @@ def is_reinsurance_flag(claim_ref: str, core_api) -> bool:
     except Exception:
         return False
 
-
 def render_overdue_alerts(core_api) -> None:
     """Renders a dismissible alert banner for all overdue diary entries."""
     try:
@@ -66,11 +65,11 @@ def render_overdue_alerts(core_api) -> None:
     rows = []
     for e in entries:
         rows.append({
-            "Claim": e.get("claim_ref", ""),
-            "Task":  e.get("description", e.get("task", "")),
-            "Due":   e.get("due_date", ""),
-            "Days Over": e.get("days_overdue", ""),
-            "Owner": e.get("assigned_to", ""),
+            "Claim":       e.get("claim_ref", ""),
+            "Task":        e.get("description", e.get("task", "")),
+            "Due":         e.get("due_date", ""),
+            "Days Over":   e.get("days_overdue", ""),
+            "Owner":       e.get("assigned_to", ""),
         })
     st.dataframe(rows, use_container_width=True, hide_index=True)
 
@@ -85,7 +84,6 @@ def render() -> None:
     with tabs[2]: _all_claims()
     with tabs[3]: _repudiation()
     with tabs[4]: _performance()
-
 
 def _dashboard() -> None:
     st.subheader("Claims Overview")
@@ -105,7 +103,6 @@ def _dashboard() -> None:
         {"Ref":"CLM-20250710033210","Client":"Grace Njoki",   "Issue":"Third-party dispute",        "Days":7},
         {"Ref":"CLM-20250709012345","Client":"David Otieno",  "Issue":"Fraud referral — inv. pending","Days":2},
     ], use_container_width=True)
-
 
 def _pending_approvals() -> None:
     st.subheader("Settlements Awaiting Head of Claims Approval")
@@ -138,7 +135,6 @@ def _pending_approvals() -> None:
         else:
             st.warning(f"Decision **{decision}** recorded for **{claim_ref}**. Claims Officer notified.")
 
-
 def _all_claims() -> None:
     st.subheader("All Claims")
     c1, c2, c3, c4 = st.columns(4)
@@ -153,7 +149,6 @@ def _all_claims() -> None:
         {"Ref":"CLM-20250710033210","Client":"Grace Njoki",   "Type":"Windscreen",     "Status":"Awaiting Payment",  "Officer":"J. Njeru", "Reserve (KES)":"22,000"},
         {"Ref":"CLM-20250709012345","Client":"David Otieno",  "Type":"Motor Accident","Status":"Pending HoC Appr.", "Officer":"T. Mutua", "Reserve (KES)":"620,000"},
     ], use_container_width=True)
-
 
 def _repudiation() -> None:
     st.subheader("Repudiation / Claim Rejection")
@@ -178,8 +173,18 @@ def _repudiation() -> None:
         elif not legal_ok:
             st.warning("Please confirm legal team sign-off before issuing repudiation.")
         else:
-            st.success(f"Claim **{claim_ref}** repudiated on: {', '.join(grounds)}. Decline letter queued for dispatch.")
-
+            # Persist repudiation record via core_api
+            try:
+                core_api.upsert_claim_status(
+                    claim_ref,
+                    status="Repudiated",
+                    reason=", ".join(grounds),
+                    notes=repud_notes,
+                    policy_section=policy_section,
+                )
+                st.success(f"Claim **{claim_ref}** repudiated on: {', '.join(grounds)}. Decline letter queued for dispatch.")
+            except Exception as e:
+                st.error(f"Failed to persist repudiation: {e}")
 
 def _performance() -> None:
     st.subheader("Claims Officers Performance — 30-Day Rolling")
