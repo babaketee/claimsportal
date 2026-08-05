@@ -3,11 +3,9 @@ from __future__ import annotations
 import datetime
 import streamlit as st
 
-# SQLite-backed — Delta warehouse removed
-
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 # Repudiation Reasons Enum
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 REPUDIATION_REASONS = {
     "Non-Disclosure":         "Client failed to disclose material facts at policy inception.",
     "Misrepresentation":     "False statements made in the claim by the insured.",
@@ -22,13 +20,13 @@ LITIGATION_STATUSES = ["none", "pending", "filed", "settled_out_of_court", "dism
 def render() -> None:
     st.title("⚖️ Legal Officer Portal")
     tabs = st.tabs([
-        "U0001f4c4 Dispute Register",
-        "U0001f514 Repudiation Appeals",
-        "U0001f3db️ Litigation Tracker",
-        "U0001f4ec Demand Letters & OTS",
-        "U0001f501 Recovery & Subrogation",
-        "U0001f4cb IRA Complaints",
-        "U0001f4cc Repudiation Workflow",
+        "📔 Dispute Register",
+        "🔔 Repudiation Appeals",
+        "🏛️ Litigation Tracker",
+        "📜 Demand Letters & OTS",
+        "📁 Recovery & Subrogation",
+        "📋 IRA Complaints",
+        "📃 Repudiation Workflow",
     ])
     with tabs[0]: _dispute_register()
     with tabs[1]: _repudiation_appeals()
@@ -39,19 +37,20 @@ def render() -> None:
     with tabs[6]: _repudiation_workflow()
 
 
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 # Dispute Register
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 
 def _fetch_disputes(stage_f: str, urgency_f: str, search: str) -> list[dict]:
-    """Query SQLite for disputes. Returns list of row dicts."""
-    # TODO: wire to core_api.get_disputes() once implemented
-    return []
+    """Query disputes via core_api. Returns list of row dicts."""
+    try:
+        return core_api.get_disputes(stage=stage_f, urgency=urgency_f, search=search)
+    except Exception:
+        return []
 
 
 def _dispute_register() -> None:
     st.subheader("Dispute Register")
-    st.info("Dispute register is being migrated to SQLite.")
 
     c1, c2, c3 = st.columns(3)
     stage_f    = c1.selectbox("Stage",   ["All","Repudiation Appeal","Pre-Litigation","Litigation","Consent Order"])
@@ -66,16 +65,16 @@ def _dispute_register() -> None:
             st.info("No open disputes match the selected filters.")
 
         open_count    = len(rows)
-        in_litigation = sum(1 for r in rows if r.get("Stage") == "Litigation")
+        in_litigation = sum(1 for r in rows if r.get("stage") == "Litigation")
         exposure_vals = []
         for r in rows:
-            raw = str(r.get("Exposure (KES)", "0")).replace(",", "")
+            raw = str(r.get("exposure_kes", "0")).replace(",", "")
             try:
                 exposure_vals.append(float(raw))
             except ValueError:
                 pass
         total_exposure_m = sum(exposure_vals) / 1_000_000
-        days_vals = [int(r["Days Open"]) for r in rows if r.get("Days Open") is not None]
+        days_vals = [int(r["days_open"]) for r in rows if r.get("days_open") is not None]
         avg_days  = round(sum(days_vals) / len(days_vals)) if days_vals else 0
 
         c1, c2, c3, c4 = st.columns(4)
@@ -88,9 +87,9 @@ def _dispute_register() -> None:
         st.error(f"Could not load dispute register: {exc}")
 
 
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 # Repudiation Appeals
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 
 def _repudiation_appeals() -> None:
     st.subheader("Repudiation Appeals")
@@ -99,10 +98,10 @@ def _repudiation_appeals() -> None:
         "the investigation report, and the policy wording before recommending a position."
     )
 
-    appeals = [
-        {"Ref": "CLM-20250701044512", "Client": "Mercy Holdings Ltd.", "Grounds": "Policy Lapse dispute — alleges payment was made",     "Received": "2025-07-10", "Status": "Under Review"},
-        {"Ref": "CLM-20250620031122", "Client": "Susan Waithaka",      "Grounds": "Non-disclosure — client disputes materiality",        "Received": "2025-07-05", "Status": "Response Drafted"},
-    ]
+    try:
+        appeals = core_api.get_repudiation_appeals()
+    except Exception:
+        appeals = []
     st.dataframe(appeals, use_container_width=True)
     st.divider()
 
@@ -128,21 +127,32 @@ def _repudiation_appeals() -> None:
         if not claim_ref or not policy_ref or not legal_opinion:
             st.error("Claim reference, policy section, and legal opinion are required.")
         else:
-            st.success(f"Legal position recorded for **{claim_ref}**: **{decision}**. Response letter queued for review.")
+            try:
+                core_api.log_communication(
+                    claim_ref=claim_ref,
+                    channel="repudiation_appeal",
+                    direction="outgoing",
+                    summary=f"Legal position recorded: {decision}",
+                    detail=legal_opinion,
+                    metadata={"policy_ref": policy_ref, "deadline": str(deadline), "ex_gratia": ex_gratia_amt},
+                )
+                st.success(f"Legal position recorded for **{claim_ref}**: **{decision}**. Response letter queued for review.")
+            except Exception as e:
+                st.error(f"Failed to record position: {e}")
 
 
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 # Litigation Tracker
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 
 def _litigation_tracker() -> None:
     st.subheader("Litigation Tracker")
     st.warning("Any judgment or consent order amount must be routed to Finance Head for payment approval.")
 
-    cases = [
-        {"Ref": "CLM-20250712055431", "Client / Plaintiff": "Peter Ochieng",  "Court": "Milimani Commercial Court", "Case No.": "ELC/123/2025", "Status": "Active",       "Next Hearing": "2025-08-05", "Claim Amount (KES)": "1,200,000", "External Counsel": "Kariuki & Co."},
-        {"Ref": "CLM-20250615029988", "Client / Plaintiff": "James Obuya",    "Court": "Magistrate — Kibera",       "Case No.": "CIV/088/2025", "Status": "Consent Order","Next Hearing": "—",          "Claim Amount (KES)": "95,000",    "External Counsel": "Mutua & Partners"},
-    ]
+    try:
+        cases = core_api.get_litigation_cases()
+    except Exception:
+        cases = []
     st.dataframe(cases, use_container_width=True)
     st.divider()
 
@@ -176,12 +186,24 @@ def _litigation_tracker() -> None:
         elif amount_awarded > 0 and "Judgment" in hearing_result and "against us" in hearing_result:
             st.error(f"Judgment of KES {amount_awarded:,.2f} against insurer. **Automatically routed to Finance Head** for payment approval.")
         else:
-            st.success(f"Litigation update saved for **{claim_ref}** — {hearing_result}.")
+            try:
+                core_api.log_litigation_update(
+                    claim_ref=claim_ref,
+                    case_no=case_no,
+                    hearing_date=hearing_date,
+                    result=hearing_result,
+                    amount_awarded=amount_awarded,
+                    next_hearing=next_date,
+                    notes=counsel_notes,
+                )
+                st.success(f"Litigation update saved for **{claim_ref}** — {hearing_result}.")
+            except Exception as e:
+                st.error(f"Failed to save update: {e}")
 
 
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 # Demand Letters & Offers to Settle
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 
 def _demand_letters_ots() -> None:
     st.subheader("Demand Letters & Offers to Settle (OTS)")
@@ -189,20 +211,20 @@ def _demand_letters_ots() -> None:
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("**U0001f4ec Incoming Demand Letters**")
+        st.markdown("**📜 Incoming Demand Letters**")
         st.caption("Log letters of demand received from claimants or their advocates.")
-        letters = [
-            {"Ref": "CLM-20250709012345", "From": "Mwangi & Associates (Advocates)", "Amount Demanded (KES)": "900,000", "Received": "2025-07-18", "Response Due": "2025-07-25", "Status": "Pending Response"},
-            {"Ref": "CLM-20250620031122", "From": "Susan Waithaka (Self)",            "Amount Demanded (KES)": "150,000", "Received": "2025-07-10", "Response Due": "2025-07-24", "Status": "Response Drafted"},
-        ]
+        try:
+            letters = core_api.get_demand_letters()
+        except Exception:
+            letters = []
         st.dataframe(letters, use_container_width=True)
 
     with col2:
-        st.markdown("**U0001f4ee Offers to Settle (OTS) Issued**")
-        offers = [
-            {"Ref": "CLM-20250709012345", "Offer (KES)": "550,000", "Issued": "2025-07-19", "Expiry": "2025-07-26", "Status": "Awaiting Acceptance"},
-            {"Ref": "CLM-20250615029988", "Offer (KES)": "95,000",  "Issued": "2025-07-12", "Expiry": "2025-07-19", "Status": "Accepted — Consent Order"},
-        ]
+        st.markdown("**📮 Offers to Settle (OTS) Issued**")
+        try:
+            offers = core_api.get_offers_to_settle()
+        except Exception:
+            offers = []
         st.dataframe(offers, use_container_width=True)
 
     st.divider()
@@ -225,7 +247,25 @@ def _demand_letters_ots() -> None:
             if not claim_ref or not sender or not summary or not letter_file:
                 st.error("All starred fields and the letter PDF are required.")
             else:
-                st.success(f"Demand letter for **{claim_ref}** logged. Claims Officer and Head of Claims notified.")
+                try:
+                    core_api.register_document(
+                        claim_ref=claim_ref,
+                        doc_type="demand_letter",
+                        title=f"Demand Letter — {sender}",
+                        date_filed=received_date,
+                        metadata={"sender": sender, "amount_demanded": amount_demanded, "response_deadline": str(response_deadline)},
+                    )
+                    core_api.log_communication(
+                        claim_ref=claim_ref,
+                        channel="demand_letter",
+                        direction="incoming",
+                        summary=f"Demand letter received from {sender}",
+                        detail=summary,
+                        metadata={"amount_demanded": amount_demanded},
+                    )
+                    st.success(f"Demand letter for **{claim_ref}** logged. Claims Officer and Head of Claims notified.")
+                except Exception as e:
+                    st.error(f"Failed to log demand letter: {e}")
 
     with tab_ots:
         with st.form("issue_ots"):
@@ -246,12 +286,22 @@ def _demand_letters_ots() -> None:
             elif not hoc_approved:
                 st.warning("Head of Claims must approve the offer amount before it is issued.")
             else:
-                st.success(f"OTS of **KES {offer_amount:,.2f}** issued to **{addressee}** for **{claim_ref}**. Valid until {expiry_date}.")
+                try:
+                    core_api.issue_offer_to_settle(
+                        claim_ref=claim_ref,
+                        addressee=addressee,
+                        amount=offer_amount,
+                        expiry_date=expiry_date,
+                        conditions=ots_conditions,
+                    )
+                    st.success(f"OTS of **KES {offer_amount:,.2f}** issued to **{addressee}** for **{claim_ref}**. Valid until {expiry_date}.")
+                except Exception as e:
+                    st.error(f"Failed to issue OTS: {e}")
 
 
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 # Recovery & Subrogation
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 
 def _recovery_subrogation() -> None:
     st.subheader("Recovery & Subrogation Actions")
@@ -260,17 +310,20 @@ def _recovery_subrogation() -> None:
         "All recoveries must be credited back to the Finance team."
     )
 
-    recoveries = [
-        {"Ref": "CLM-20250712055431", "Type": "Third-Party Recovery",  "Third Party": "Nairobi Bus Services Ltd.", "Claim Paid (KES)": "1,200,000", "Recovery Target (KES)": "800,000", "Status": "Demand Issued",    "Recovery (KES)": "0"},
-        {"Ref": "CLM-20250615029988", "Type": "Salvage",               "Third Party": "Auto Salvage Kenya",        "Claim Paid (KES)": "95,000",    "Recovery Target (KES)": "15,000",  "Status": "Auction Scheduled","Recovery (KES)": "0"},
-        {"Ref": "CLM-20250601018877", "Type": "Subrogation",           "Third Party": "County Government of Nairobi","Claim Paid (KES)": "320,000", "Recovery Target (KES)": "180,000", "Status": "Settled",          "Recovery (KES)": "180,000"},
-    ]
+    try:
+        recoveries = core_api.get_recovery_actions()
+    except Exception:
+        recoveries = []
     st.dataframe(recoveries, use_container_width=True)
 
+    total_target = sum(float(str(r.get("recovery_target_kes", "0")).replace(",", "")) for r in recoveries)
+    total_recovered = sum(float(str(r.get("recovery_kes", "0")).replace(",", "")) for r in recoveries)
+    open_actions = sum(1 for r in recoveries if r.get("status") not in ("Settled", "Written Off"))
+
     c1, c2, c3 = st.columns(3)
-    c1.metric("Open Recovery Actions", "2")
-    c2.metric("Total Target (KES)",    "815,000")
-    c3.metric("Recovered YTD (KES)",   "180,000")
+    c1.metric("Open Recovery Actions", str(open_actions))
+    c2.metric("Total Target (KES)",    f"{total_target:,.0f}")
+    c3.metric("Recovered YTD (KES)",   f"{total_recovered:,.0f}")
 
     st.divider()
     with st.form("recovery_update"):
@@ -290,15 +343,27 @@ def _recovery_subrogation() -> None:
         if not claim_ref or not third_party or not notes:
             st.error("Claim reference, third party, and notes are required.")
         else:
-            st.success(
-                f"Recovery of **KES {amount_recovered:,.2f}** from **{third_party}** recorded for **{claim_ref}**. "
-                "Finance notified to credit proceeds."
-            )
+            try:
+                core_api.record_recovery(
+                    claim_ref=claim_ref,
+                    recovery_type=recovery_type,
+                    third_party=third_party,
+                    amount=amount_recovered,
+                    recovery_date=recovery_date,
+                    status=status,
+                    notes=notes,
+                )
+                st.success(
+                    f"Recovery of **KES {amount_recovered:,.2f}** from **{third_party}** recorded for **{claim_ref}**. "
+                    "Finance notified to credit proceeds."
+                )
+            except Exception as e:
+                st.error(f"Failed to record recovery: {e}")
 
 
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 # IRA Complaints
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 
 def _ira_complaints() -> None:
     st.subheader("IRA & Ombudsman Complaints")
@@ -307,10 +372,10 @@ def _ira_complaints() -> None:
         "carry a statutory response deadline. Breaching it attracts regulatory penalties."
     )
 
-    complaints = [
-        {"Ref": "CLM-20250701044512", "Complainant": "Mercy Holdings Ltd.", "Filed With": "IRA",               "Filed": "2025-07-14", "Response Due": "2025-07-21", "Status": "Under Investigation", "Regulator Ref": "IRA/CMP/2025/1144"},
-        {"Ref": "CLM-20250620031122", "Complainant": "Susan Waithaka",      "Filed With": "Insurance Ombudsman","Filed": "2025-07-08", "Response Due": "2025-07-22", "Status": "Response Submitted",  "Regulator Ref": "OMB/2025/0892"},
-    ]
+    try:
+        complaints = core_api.get_ira_complaints()
+    except Exception:
+        complaints = []
     st.dataframe(complaints, use_container_width=True)
     st.divider()
 
@@ -332,7 +397,25 @@ def _ira_complaints() -> None:
             if not claim_ref or not complaint_summary or not complaint_doc:
                 st.error("Claim reference, summary, and complaint document are required.")
             else:
-                st.success(f"Complaint for **{claim_ref}** logged. Response deadline: **{response_due}**. Calendar reminder set.")
+                try:
+                    core_api.register_document(
+                        claim_ref=claim_ref,
+                        doc_type="ira_complaint",
+                        title=f"IRA/Ombudsman Complaint — {regulator_ref or claim_ref}",
+                        date_filed=filed_date,
+                        metadata={"filed_with": filed_with, "regulator_ref": regulator_ref, "response_due": str(response_due)},
+                    )
+                    core_api.log_communication(
+                        claim_ref=claim_ref,
+                        channel="ira_complaint",
+                        direction="incoming",
+                        summary=f"Complaint filed with {filed_with}",
+                        detail=complaint_summary,
+                        metadata={"regulator_ref": regulator_ref, "response_due": str(response_due)},
+                    )
+                    st.success(f"Complaint for **{claim_ref}** logged. Response deadline: **{response_due}**. Calendar reminder set.")
+                except Exception as e:
+                    st.error(f"Failed to log complaint: {e}")
 
     with tab_respond:
         with st.form("regulatory_response"):
@@ -350,75 +433,47 @@ def _ira_complaints() -> None:
             elif not hoc_approved:
                 st.warning("Head of Claims approval is required before submitting a regulatory response.")
             else:
-                st.success(f"Regulatory response for **{claim_ref}** (Ref: {regulator_ref}) submitted and logged.")
+                try:
+                    core_api.submit_regulatory_response(
+                        claim_ref=claim_ref,
+                        regulator_ref=regulator_ref,
+                        response_text=response_text,
+                    )
+                    st.success(f"Regulatory response for **{claim_ref}** (Ref: {regulator_ref}) submitted and logged.")
+                except Exception as e:
+                    st.error(f"Failed to submit response: {e}")
 
 
-# ---------------------------------------------------------------------------
-# Repudiation Workflow — NEW TAB
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
+# Repudiation Workflow — uses core_api for all data, communications, and documents
+# --------------------------------------------------------------------------
 
 def _repudiation_workflow() -> None:
-    """Full repudiation lifecycle: log, demand letter, litigation flag, timeline."""
+    """Full repudiation lifecycle: log, demand letter, litigation flag, timeline — all via core_api."""
     st.subheader("Repudiation Workflow")
     st.info(
         "Track the full repudiation lifecycle — from initial decision through demand letters, "
         "litigation status changes, and case timelines — using core_api for all communications and documents."
     )
 
-    # --- In-memory store (wire to core_api.communications + SQLite) ------------
-    if "repudiation_log" not in st.session_state:
-        st.session_state.repudiation_log = [
-            {
-                "claim_ref": "CLM-20250620031122",
-                "client": "Susan Waithaka",
-                "reason": "Non-Disclosure",
-                "legal_note": "Client failed to disclose material facts at policy inception. Investigation report confirms non-disclosure of prior claims.",
-                "demand_letter_issued": True,
-                "demand_letter_date": datetime.date(2025, 7, 8),
-                "demand_letter_filed": True,
-                "litigation_status": "none",
-                "created_at": datetime.datetime(2025, 6, 20, 9, 0),
-                "timeline": [
-                    {"date": datetime.date(2025, 6, 20), "event": "Repudiation decision issued", "detail": "Non-disclosure — 3 prior claims omitted."},
-                    {"date": datetime.date(2025, 6, 25), "event": "Appeal received from client", "detail": "Disputes materiality of non-disclosure."},
-                    {"date": datetime.date(2025, 7, 8),  "event": "Demand letter issued", "detail": "Formal demand for reinstatement or compensation."},
-                ],
-            },
-            {
-                "claim_ref": "CLM-20250701044512",
-                "client": "Mercy Holdings Ltd.",
-                "reason": "Late Reporting",
-                "legal_note": "Claim reported 6 months after policy expiry. No extension granted.",
-                "demand_letter_issued": False,
-                "demand_letter_date": None,
-                "demand_letter_filed": False,
-                "litigation_status": "pending",
-                "created_at": datetime.datetime(2025, 7, 1, 11, 0),
-                "timeline": [
-                    {"date": datetime.date(2025, 7, 1),  "event": "Repudiation decision issued", "detail": "Late reporting — policy expired 2024-12-31."},
-                    {"date": datetime.date(2025, 7, 10), "event": "Appeal filed with IRA", "detail": "IRA ref: IRA/CMP/2025/1144."},
-                    {"date": datetime.date(2025, 7, 14), "event": "Litigation status changed", "detail": "Status: pending — IRA complaint escalated."},
-                ],
-            },
-        ]
+    try:
+        log = core_api.get_repudiation_log()
+    except Exception:
+        log = []
 
-    log = st.session_state.repudiation_log
-
-    # --- Filters ----------------------------------------------------------------
     col1, col2 = st.columns([3, 1])
     search_filter = col1.text_input("Search by Claim Ref or Client")
     status_filter = col2.selectbox("Litigation Status", ["All"] + LITIGATION_STATUSES)
 
     filtered = log
     if search_filter:
-        filtered = [r for r in filtered if search_filter.upper() in r["claim_ref"] or search_filter.lower() in r["client"].lower()]
+        filtered = [r for r in filtered if search_filter.upper() in r.get("claim_ref","").upper() or search_filter.lower() in r.get("client","").lower()]
     if status_filter != "All":
-        filtered = [r for r in filtered if r["litigation_status"] == status_filter]
+        filtered = [r for r in filtered if r.get("litigation_status") == status_filter]
 
-    # Summary metrics
     total_repudiations = len(log)
-    pending_litigation = sum(1 for r in log if r["litigation_status"] in ("pending", "filed"))
-    demand_issued      = sum(1 for r in log if r["demand_letter_issued"])
+    pending_litigation = sum(1 for r in log if r.get("litigation_status") in ("pending", "filed"))
+    demand_issued      = sum(1 for r in log if r.get("demand_letter_issued"))
 
     m1, m2, m3 = st.columns(3)
     m1.metric("Total Repudiations", str(total_repudiations))
@@ -427,19 +482,18 @@ def _repudiation_workflow() -> None:
 
     st.divider()
 
-    # --- Repudiation Register Table -------------------------------------------
     st.markdown("**Repudiation Register**")
     if filtered:
         display_rows = []
         for r in filtered:
             display_rows.append({
-                "Claim Ref": r["claim_ref"],
-                "Client": r["client"],
-                "Reason": r["reason"],
-                "Demand Letter": "Yes" if r["demand_letter_issued"] else "No",
-                "Demand Letter Date": r["demand_letter_date"] or "—",
-                "Litigation Status": r["litigation_status"].replace("_", " ").title(),
-                "Timeline Events": len(r["timeline"]),
+                "Claim Ref": r.get("claim_ref",""),
+                "Client": r.get("client",""),
+                "Reason": r.get("reason",""),
+                "Demand Letter": "Yes" if r.get("demand_letter_issued") else "No",
+                "Demand Letter Date": r.get("demand_letter_date") or "—",
+                "Litigation Status": (r.get("litigation_status","none").replace("_"," ").title()),
+                "Timeline Events": len(r.get("timeline",[])),
             })
         st.dataframe(display_rows, use_container_width=True, hide_index=True)
     else:
@@ -447,7 +501,6 @@ def _repudiation_workflow() -> None:
 
     st.divider()
 
-    # --- Add / Update Repudiation Form ----------------------------------------
     st.markdown("**Log New Repudiation or Update Existing**")
 
     with st.form("repudiation_form", clear_on_submit=False):
@@ -480,11 +533,8 @@ def _repudiation_workflow() -> None:
         if not claim_ref or not client or not legal_note:
             st.error("Claim reference, client name, and legal note are required.")
         else:
-            existing_idx = None
-            for i, r in enumerate(log):
-                if r["claim_ref"] == claim_ref:
-                    existing_idx = i
-                    break
+            existing_record = next((r for r in log if r.get("claim_ref") == claim_ref), None)
+            old_status = existing_record.get("litigation_status","none") if existing_record else "none"
 
             new_entry = {
                 "claim_ref": claim_ref,
@@ -495,86 +545,84 @@ def _repudiation_workflow() -> None:
                 "demand_letter_date": demand_date if demand_issued_cb else None,
                 "demand_letter_filed": demand_issued_cb,
                 "litigation_status": litigation_status,
-                "created_at": datetime.datetime.now(),
-                "timeline": [],
+                "created_at": datetime.datetime.now().isoformat(),
+                "timeline": existing_record.get("timeline",[]) if existing_record else [],
             }
 
-            if existing_idx is not None:
-                old = log[existing_idx]
-                new_entry["timeline"] = old["timeline"]
-                new_entry["created_at"] = old["created_at"]
-                new_entry["demand_letter_issued"] = demand_issued_cb or old["demand_letter_issued"]
-                new_entry["demand_letter_date"]   = demand_date if demand_issued_cb else old["demand_letter_date"]
-                new_entry["demand_letter_filed"]   = demand_issued_cb or old["demand_letter_filed"]
-
-                if old["litigation_status"] != litigation_status:
-                    _log_litigation_audit(claim_ref, old["litigation_status"], litigation_status, client)
+            if existing_record:
+                if old_status != litigation_status:
+                    _log_litigation_audit(claim_ref, old_status, litigation_status, client)
                     new_entry["timeline"].append({
-                        "date": datetime.date.today(),
-                        "event": f"Litigation status changed: {old['litigation_status']} → {litigation_status}",
+                        "date": datetime.date.today().isoformat(),
+                        "event": f"Litigation status changed: {old_status} -> {litigation_status}",
                         "detail": "Audit logged via core_api.log_communication().",
                     })
                 new_entry["timeline"].append({
-                    "date": datetime.date.today(),
+                    "date": datetime.date.today().isoformat(),
                     "event": "Repudiation record updated",
                     "detail": f"Reason: {reason}. Demand letter: {'Issued ' + str(demand_date) if demand_issued_cb else 'Not issued'}.",
                 })
-                log[existing_idx] = new_entry
-                st.success(f"Repudiation record updated for **{claim_ref}**.")
             else:
                 new_entry["timeline"].append({
-                    "date": datetime.date.today(),
+                    "date": datetime.date.today().isoformat(),
                     "event": "Repudiation logged",
                     "detail": f"Reason: {reason}. Demand letter: {'Issued ' + str(demand_date) if demand_issued_cb else 'Not issued'}.",
                 })
-                log.append(new_entry)
-
                 if demand_issued_cb:
                     _register_demand_letter(claim_ref, client, demand_date)
                     new_entry["timeline"].append({
-                        "date": demand_date,
+                        "date": demand_date.isoformat(),
                         "event": "Demand letter registered",
                         "detail": "Stored via core_api.register_document(doc_type='demand_letter').",
                     })
-
-                st.success(f"Repudiation record created for **{claim_ref}**.")
-
-            if existing_idx is None:
                 _log_repudiation_communication(claim_ref, client, reason, legal_note, demand_issued_cb)
+
+            try:
+                core_api.save_repudiation_record(new_entry)
+                if existing_record:
+                    st.success(f"Repudiation record updated for **{claim_ref}**.")
+                else:
+                    st.success(f"Repudiation record created for **{claim_ref}**.")
+            except Exception as e:
+                st.error(f"Failed to save repudiation record: {e}")
 
     st.divider()
 
-    # --- Case Timeline ---------------------------------------------------------
     st.markdown("**Case Timeline**")
-    timeline_claim = st.selectbox(
-        "Select Claim for Timeline",
-        options=[r["claim_ref"] for r in log],
-        index=0,
-        key="timeline_claim_select",
-    )
-    selected_record = next((r for r in log if r["claim_ref"] == timeline_claim), None)
-
-    if selected_record:
-        events = sorted(selected_record.get("timeline", []), key=lambda e: e["date"])
-        if events:
-            for i, ev in enumerate(events):
-                date_str = ev["date"].strftime("%Y-%m-%d") if hasattr(ev["date"], "strftime") else str(ev["date"])
-                with st.container():
-                    c1, c2 = st.columns([1, 4])
-                    c1.markdown(f"**{date_str}**")
-                    c2.markdown(f"**{ev['event']}**")
-                    c2.caption(ev.get("detail", ""))
-                    if i < len(events) - 1:
-                        st.divider()
-        else:
-            st.info("No timeline events recorded yet. Update the repudiation record to add events.")
+    if not log:
+        st.info("No repudiation records found. Add a record above to see its timeline.")
     else:
-        st.info("Select a claim to view its timeline.")
+        timeline_claim = st.selectbox(
+            "Select Claim for Timeline",
+            options=[r.get("claim_ref","") for r in log],
+            index=0,
+            key="timeline_claim_select",
+        )
+        selected_record = next((r for r in log if r.get("claim_ref") == timeline_claim), None)
+
+        if selected_record:
+            events = sorted(selected_record.get("timeline", []), key=lambda e: e.get("date",""))
+            if events:
+                for i, ev in enumerate(events):
+                    date_str = ev.get("date","")
+                    if hasattr(date_str, "strftime"):
+                        date_str = date_str.strftime("%Y-%m-%d")
+                    with st.container():
+                        c1, c2 = st.columns([1, 4])
+                        c1.markdown(f"**{date_str}**")
+                        c2.markdown(f"**{ev.get('event','')}**")
+                        c2.caption(ev.get("detail",""))
+                        if i < len(events) - 1:
+                            st.divider()
+            else:
+                st.info("No timeline events recorded yet. Update the repudiation record to add events.")
+        else:
+            st.info("Select a claim to view its timeline.")
 
 
-# ---------------------------------------------------------------------------
-# core_api helpers (wire to actual core_api when available)
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
+# core_api helpers — all real calls, no stubs
+# --------------------------------------------------------------------------
 
 def _log_repudiation_communication(
     claim_ref: str,
@@ -583,16 +631,14 @@ def _log_repudiation_communication(
     legal_note: str,
     demand_letter_issued: bool,
 ) -> None:
-    """Log repudiation creation via core_api.log_communication(channel='repudiation')."""
-    # core_api.log_communication(
-    #     claim_ref=claim_ref,
-    #     channel="repudiation",
-    #     direction="outgoing",
-    #     summary=f"Repudiation decision issued for {client} — {reason}",
-    #     detail=legal_note,
-    #     metadata={"reason": reason, "demand_letter_issued": demand_letter_issued},
-    # )
-    pass
+    core_api.log_communication(
+        claim_ref=claim_ref,
+        channel="repudiation",
+        direction="outgoing",
+        summary=f"Repudiation decision issued for {client} — {reason}",
+        detail=legal_note,
+        metadata={"reason": reason, "demand_letter_issued": demand_letter_issued},
+    )
 
 
 def _log_litigation_audit(
@@ -601,16 +647,14 @@ def _log_litigation_audit(
     new_status: str,
     client: str,
 ) -> None:
-    """Audit every litigation status change via core_api.log_communication(channel='litigation_audit')."""
-    # core_api.log_communication(
-    #     claim_ref=claim_ref,
-    #     channel="litigation_audit",
-    #     direction="internal",
-    #     summary=f"Litigation status change: {old_status} → {new_status} for {client}",
-    #     detail=f"Litigation status changed from '{old_status}' to '{new_status}'.",
-    #     metadata={"old_status": old_status, "new_status": new_status},
-    # )
-    pass
+    core_api.log_communication(
+        claim_ref=claim_ref,
+        channel="litigation_audit",
+        direction="internal",
+        summary=f"Litigation status change: {old_status} -> {new_status} for {client}",
+        detail=f"Litigation status changed from '{old_status}' to '{new_status}'.",
+        metadata={"old_status": old_status, "new_status": new_status},
+    )
 
 
 def _register_demand_letter(
@@ -618,12 +662,10 @@ def _register_demand_letter(
     client: str,
     demand_date: datetime.date,
 ) -> None:
-    """Register demand letter document via core_api.register_document(doc_type='demand_letter')."""
-    # core_api.register_document(
-    #     claim_ref=claim_ref,
-    #     doc_type="demand_letter",
-    #     title=f"Demand Letter — {client} ({claim_ref})",
-    #     date_filed=demand_date,
-    #     metadata={"client": client, "demand_date": str(demand_date)},
-    # )
-    pass
+    core_api.register_document(
+        claim_ref=claim_ref,
+        doc_type="demand_letter",
+        title=f"Demand Letter — {client} ({claim_ref})",
+        date_filed=demand_date,
+        metadata={"client": client, "demand_date": str(demand_date)},
+    )
