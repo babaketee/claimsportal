@@ -2,3 +2,4 @@ psycopg2-binary>=2.9.9
 streamlit>=1.28
 pandas>=2.0
 python-dateutil>=2.8
+plotly>=5.18.0
