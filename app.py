@@ -32,6 +32,7 @@ ROLES: dict[str, str] = {
     "spare_parts":      "Spare Parts Provider",
     "legal":            "Legal Officer",
     "admin":            "Internal Staff / Admin",
+    "super_admin":       "Super Administrator",
 }
 
 DEMO_ACCOUNTS: dict[str, dict] = {
@@ -46,6 +47,7 @@ DEMO_ACCOUNTS: dict[str, dict] = {
     "spares@insure.demo":        {"password": "Catalog#99",   "role": "spare_parts"},
     "legal@insure.demo":         {"password": "Counsel#99",   "role": "legal"},
     "admin@insure.demo":         {"password": "SysCtrl#99",   "role": "admin"},
+    "super@insure.demo":         {"password": "Super#99",    "role": "super_admin"},
 }
 
 def show_login() -> None:
@@ -117,6 +119,9 @@ def main() -> None:
         render()
     elif role == "admin":
         from views.admin_dashboard import render
+        render()
+    elif role == "super_admin":
+        from views.super_admin import render
         render()
     else:
         st.error("Unknown role. Contact your administrator.")
