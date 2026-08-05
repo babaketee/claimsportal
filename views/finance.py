@@ -1,4 +1,4 @@
-"""Finance Portal — Accounts Payable and Financial Control."""
+"""Finance Portal â Accounts Payable and Financial Control."""
 from __future__ import annotations
 import datetime
 import streamlit as st
@@ -6,14 +6,14 @@ import streamlit as st
 import core_api
 import pandas as pd
 
-FINANCE_HEAD_LIMIT = 5_000_000  # KES — above this needs Board / Management resolution
+FINANCE_HEAD_LIMIT = 5_000_000  # KES â above this needs Board / Management resolution
 ROLE_LABELS = {"finance":"Finance / Accounts Payable","finance_head":"Finance Head"}
 
 
 def render(role: str) -> None:
-    st.title(f"💰 {ROLE_LABELS.get(role, 'Finance Portal')}")
+    st.title(f"ð° {ROLE_LABELS.get(role, 'Finance Portal')}")
     if role == "finance_head":
-        tabs = st.tabs(["📊 Dashboard","✅ High-Value Approvals","📥 Payment Queue","💸 Process Payment","🔄 Payment Status","📑 Reports"])
+        tabs = st.tabs(["ð Dashboard","â High-Value Approvals","ð¥ Payment Queue","ð¸ Process Payment","ð Payment Status","ð Reports"])
         with tabs[0]: _financial_dashboard()
         with tabs[1]: _high_value_approvals()
         with tabs[2]: _payment_queue()
@@ -21,7 +21,7 @@ def render(role: str) -> None:
         with tabs[4]: _update_payment_status()
         with tabs[5]: _financial_reports()
     else:
-        tabs = st.tabs(["📥 Payment Queue","💸 Process Payment","🔄 Update Status","📊 Reconciliation"])
+        tabs = st.tabs(["ð¥ Payment Queue","ð¸ Process Payment","ð Update Status","ð Reconciliation"])
         with tabs[0]: _payment_queue()
         with tabs[1]: _process_payment()
         with tabs[2]: _update_payment_status()
@@ -74,11 +74,11 @@ def _process_payment(settlement_id: str, claim_ref: str) -> None:
     st.markdown(f"**Status:** {settlement['status']}")
     
     if settlement['status'] == 'paid':
-        st.success(f"✅ Already paid — bank ref: {settlement.get('bank_ref', 'N/A')}")
+        st.success(f"â Already paid â bank ref: {settlement.get('bank_ref', 'N/A')}")
         return
     
     if settlement['status'] != 'approved':
-        st.warning(f"Cannot pay — settlement status is '{settlement['status']}', must be 'approved' first.")
+        st.warning(f"Cannot pay â settlement status is '{settlement['status']}', must be 'approved' first.")
         return
     
     with st.form(key=f"pay_form_{settlement_id}"):
@@ -90,7 +90,7 @@ def _process_payment(settlement_id: str, claim_ref: str) -> None:
                 return
             ok = core_api.mark_settlement_paid(settlement_id, bank_ref.strip())
             if ok:
-                st.success(f"✅ Payment confirmed — {settlement_id}")
+                st.success(f"â Payment confirmed â {settlement_id}")
                 # Log communication
                 core_api.log_communication(
                     claim_ref=claim_ref,
@@ -109,20 +109,15 @@ def _payment_dashboard() -> None:
     st.subheader("Payment Dashboard")
     
     # Show settlements needing payment (approved status)
-    conn = core_api._get_conn()
-    df = pd.read_sql(
-        "SELECT s.*, 'STL-' || substr(s.settlement_id,1,10) as short_id FROM settlements s WHERE s.status IN ('approved', 'pending') ORDER BY s.recommended_at DESC",
-        conn
-    )
-    conn.close()
-    
+
+    df = core_api.get_settlements_by_status(['approved', 'pending'])    
     if df.empty:
         st.info("No settlements awaiting payment.")
         return
     
     st.markdown(f"**{len(df)} settlement(s) awaiting payment**")
     for _, row in df.iterrows():
-        with st.expander(f"**{row['claim_ref']}** — {row['payee_name']} — KES {row['amount']:,.0f} — {row['status']}"):
+        with st.expander(f"**{row['claim_ref']}** â {row['payee_name']} â KES {row['amount']:,.0f} â {row['status']}"):
             col1, col2, col3 = st.columns(3)
             with col1: st.metric("Gross", f"KES {row['amount']:,.0f}")
             with col2: st.metric("WHT", f"KES {row.get('wht_amount', 0):,.0f}")
@@ -147,8 +142,8 @@ def _update_payment_status() -> None:
         payee_name = c2.text_input("Payee Name *")
         new_status = st.selectbox("New Status *", [
             "Payment Initiated","Payment Confirmed by Bank",
-            "EFT Returned — Payee Bank Error","EFT Returned — Wrong Account Number",
-            "RTGS Delayed — Bank Holiday","Cancelled — Refer Back to Claims Officer",
+            "EFT Returned â Payee Bank Error","EFT Returned â Wrong Account Number",
+            "RTGS Delayed â Bank Holiday","Cancelled â Refer Back to Claims Officer",
         ])
         st.text_input("Bank Reference / SWIFT Ref")
         st.text_area("Notes")
@@ -162,7 +157,7 @@ def _update_payment_status() -> None:
     st.markdown("**Recent Status Updates**")
     st.dataframe([
         {"Ref":"CLM-20250708020011","Payee":"James Kamau",        "Status":"Payment Confirmed by Bank",    "Updated":"2025-07-18 14:30","By":"M. Wangari"},
-        {"Ref":"CLM-20250706013345","Payee":"Nairobi Garage Ltd.","Status":"EFT Returned — Wrong Account","Updated":"2025-07-17 11:00","By":"M. Wangari"},
+        {"Ref":"CLM-20250706013345","Payee":"Nairobi Garage Ltd.","Status":"EFT Returned â Wrong Account","Updated":"2025-07-17 11:00","By":"M. Wangari"},
         {"Ref":"CLM-20250704009876","Payee":"Faith Achieng",       "Status":"Payment Confirmed by Bank",    "Updated":"2025-07-16 16:15","By":"P. Njoroge"},
     ], use_container_width=True)
 
@@ -181,25 +176,25 @@ def _reconciliation() -> None:
         {"Ref":"CLM-20250706013345","Payee":"Nairobi Garage Ltd.","Amount (KES)":"78,500", "Type":"Garage Fee","Status":"Returned",  "Bank Ref":"EQT-20250717-0012"},
         {"Ref":"CLM-20250704009876","Payee":"Faith Achieng",      "Amount (KES)":"45,000", "Type":"Settlement","Status":"Reconciled","Bank Ref":"ABB-20250716-0089"},
     ], use_container_width=True)
-    st.warning("1 unreconciled item — EFT return for Nairobi Garage Ltd. Re-process or return to Claims Officer.")
+    st.warning("1 unreconciled item â EFT return for Nairobi Garage Ltd. Re-process or return to Claims Officer.")
 
 
 def _financial_dashboard() -> None:
-    st.subheader("Financial Dashboard — Claims Costs")
+    st.subheader("Financial Dashboard â Claims Costs")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Total Reserves (KES M)","48.6","+2.1 MoM"); c2.metric("YTD Claims Paid (KES M)","142.3","+18% vs LY")
     c3.metric("Loss Ratio (YTD)","68%","+3%"); c4.metric("Recoveries / Salvage (KES M)","4.2","+0.5")
     st.divider()
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("**Payments by Type — This Month**")
+        st.markdown("**Payments by Type â This Month**")
         st.dataframe([
             {"Type":"Client Cash Settlements","KES":"6,400,000"},{"Type":"Write-Off Payments","KES":"1,800,000"},
             {"Type":"Garage / Repair Fees","KES":"3,100,000"},{"Type":"Assessor Fees","KES":"480,000"},
             {"Type":"Investigator Fees","KES":"120,000"},{"Type":"Third-Party Settlements","KES":"500,000"},
         ], use_container_width=True)
     with col2:
-        st.markdown("**Reserve vs Actual — by Claim Type**")
+        st.markdown("**Reserve vs Actual â by Claim Type**")
         st.dataframe([
             {"Type":"Motor Accident",  "Reserve (M)":"24.1","Paid (M)":"16.8","IBNR (M)":"7.3"},
             {"Type":"Theft",           "Reserve (M)":"9.4", "Paid (M)":"7.1", "IBNR (M)":"2.3"},
@@ -211,7 +206,7 @@ def _financial_dashboard() -> None:
 
 
 def _high_value_approvals() -> None:
-    st.subheader(f"High-Value Settlements — Referred by Head of Claims")
+    st.subheader(f"High-Value Settlements â Referred by Head of Claims")
     st.warning(f"Items above KES {FINANCE_HEAD_LIMIT:,} require Board / Management resolution.")
     st.dataframe([
         {"Ref":"CLM-20250705088812","Client":"Mercy Holdings Ltd.","Type":"Commercial Write-Off","Amount (KES)":"3,200,000","HoC":"J. Mwathi","Submitted":"2025-07-15"},
@@ -221,8 +216,8 @@ def _high_value_approvals() -> None:
         c1, c2 = st.columns(2)
         claim_ref   = c1.text_input("Claim Reference *")
         decision    = c2.selectbox("Decision *", [
-            "Approve — Proceed to Payment","Escalate to Board",
-            "Reject — Refer Back to Head of Claims","Request Reinsurance Recovery First",
+            "Approve â Proceed to Payment","Escalate to Board",
+            "Reject â Refer Back to Head of Claims","Request Reinsurance Recovery First",
         ])
         fh_comments = st.text_area("Finance Head Comments *")
         st.file_uploader("Board Resolution / Management Letter (if applicable)", type=["pdf"])
@@ -243,7 +238,7 @@ def _financial_reports() -> None:
     ])
     period = c2.selectbox("Period", ["July 2025","June 2025","Q2 2025 (Apr-Jun)","YTD 2025"])
     if st.button("Generate Report", type="primary", use_container_width=True):
-        st.info(f"Generating **{report}** for **{period}** … Connect Delta tables for live output.")
+        st.info(f"Generating **{report}** for **{period}** â¦ Connect Delta tables for live output.")
 
 
 def show() -> None:
