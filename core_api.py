@@ -8,11 +8,15 @@ import random
 _DB_PATH = "claims_history.db"
 
 # -----------------------------------------------------------------------
-# DB access — PostgreSQL in production (DATABASE_URL env var),
+# DB access â PostgreSQL in production (DATABASE_URL env var),
 # SQLite fallback for local dev
 # -----------------------------------------------------------------------
 def _get_db():
-    database_url = os.getenv("DATABASE_URL", "")
+    # Streamlit Cloud: st.secrets | Local dev: os.getenv
+    try:
+        database_url = st.secrets.get("DATABASE_URL", "") or os.getenv("DATABASE_URL", "")
+    except Exception:
+        database_url = os.getenv("DATABASE_URL", "")
     if database_url:
         import psycopg2
         return psycopg2.connect(database_url)
