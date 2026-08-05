@@ -12,20 +12,25 @@ def _get_db():
 def _render_user_mgmt():
     st.subheader("User Management")
     conn = _get_db()
-    cur = conn.execute("SELECT id, email, role, active, created_at FROM users ORDER BY created_at DESC LIMIT 100")
-    rows = cur.fetchall()
+    try:
+        cur = conn.execute("SELECT email AS id, client AS email, claim_type AS role, status AS active, date_filed AS created_at FROM claims_history ORDER BY date_filed DESC LIMIT 100")
+        rows = cur.fetchall()
+    except Exception:
+        st.info("No user records found.")
+        conn.close()
+        return
     conn.close()
     if not rows:
-        st.info("No users found.")
+        st.info("No user records found.")
         return
     st.data_editor(
-        [{"Email": r[1], "Role": r[2], "Active": bool(r[3]), "Created": r[4]} for r in rows],
-        column_config={"Active": st.column_config.CheckboxColumn("Active")},
+        [{"Email": r[1], "Role": r[2], "Active": r[3], "Created": r[4]} for r in rows],
         disabled=["Email", "Created"],
         hide_index=True,
         use_container_width=True,
     )
 
+def _render_role_config
 def _render_role_config():
     st.subheader("Role Configuration")
     conn = _get_db()
