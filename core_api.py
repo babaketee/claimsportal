@@ -1,14 +1,14 @@
-"""Core API client â local SQLite + optional external REST core.
+"""Core API client Ã¢ÂÂ local SQLite + optional external REST core.
 
 Local SQLite database: claims_operations.db (separate from claims_history.db
 which is read-only audit log). Created automatically.
 
 Tables added here:
-  reserves          â claim reserve amounts (initial + supplemental)
-  diary_entries     â follow-up tasks with due dates
-  communications    â SMS/call/email log per claim
-  expert_assignmentsâ assessor/garage/investigator assignments
-  claim_documents   â document metadata (actual files go to core API)
+  reserves          Ã¢ÂÂ claim reserve amounts (initial + supplemental)
+  diary_entries     Ã¢ÂÂ follow-up tasks with due dates
+  communications    Ã¢ÂÂ SMS/call/email log per claim
+  expert_assignmentsÃ¢ÂÂ assessor/garage/investigator assignments
+  claim_documents   Ã¢ÂÂ document metadata (actual files go to core API)
 
 All functions are no-ops when CORE_API_BASE_URL is not configured.
 """
@@ -497,8 +497,38 @@ def get_sla_status(claim_ref: str, submitted_at: str) -> dict:
 
 def _seed_demo_data_if_empty():
     """Load 45 realistic Kenyan claims (25 motor + 20 business) on first run."""
-    conn = get_db()
-    cur = conn.execute("SELECT COUNT(*) FROM claims_history")
+    import sqlite3
+    conn = sqlite3.connect(_DB_PATH, check_same_thread=False)
+    cur = conn.cursor()
+
+    # ── Ensure claims_history + status_history exist (railway-migration fix) ──
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS claims_history (
+            claim_ref     TEXT PRIMARY KEY,
+            client        TEXT,
+            claim_type    TEXT,
+            insurer       TEXT,
+            claim_cause   TEXT,
+            status        TEXT,
+            location      TEXT,
+            vehicle_reg   TEXT,
+            date_filed    TEXT,
+            last_updated  TEXT
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS status_history (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            claim_ref     TEXT,
+            action        TEXT,
+            user_email    TEXT,
+            timestamp     TEXT,
+            notes         TEXT
+        )
+    """)
+    conn.commit()
+
+    cur.execute("SELECT COUNT(*) FROM claims_history")
     count = cur.fetchone()[0]
     if count > 0:
         conn.close()
@@ -556,7 +586,7 @@ def _seed_demo_data_if_empty():
         ("BSN-2026-0020", "investigator@insure.demo", "Business Insurance", "Kenya direct", "Burglary", "Reported - Under Investigation", "Nairobi", "OFF-020"),
     ]
 
-    conn = get_db()
+    conn = sqlite3.connect(_DB_PATH, check_same_thread=False)
     now = "2026-07-30 12:00:00"
 
     for c in motor_claims + business_claims:
