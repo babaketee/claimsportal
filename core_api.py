@@ -8,7 +8,7 @@ import random
 _DB_PATH = "claims_history.db"
 
 # -----------------------------------------------------------------------
-# DB access — PostgreSQL in production, SQLite fallback for dev
+# DB access â PostgreSQL in production, SQLite fallback for dev
 # Set DATABASE_URL in Streamlit Cloud secrets:
 #   DATABASE_URL=postgresql://user:pass@host:5432/dbname
 # -----------------------------------------------------------------------
@@ -307,12 +307,12 @@ def recommend_settlement(claim_ref, amount, settlement_type, approved_by=None):
     cur.close()
     conn.close()
 
-def mark_settlement_paid(settlement_id):
+def mark_settlement_paid(settlement_id, bank_ref=None):
     _ensure_tables()
     conn = _get_db()
     now = datetime.now().isoformat()
     cur = conn.cursor()
-    cur.execute("UPDATE settlements SET status = 'Paid', settlement_date = ? WHERE id = ?", (now, settlement_id))
+    cur.execute("UPDATE settlements SET status = 'Paid', settlement_date = ?, bank_ref = ? WHERE id = ?", (now, bank_ref, settlement_id))
     conn.commit()
     cur.close()
     conn.close()
@@ -330,6 +330,23 @@ def get_settlements(claim_ref):
 # -----------------------------------------------------------------------
 # Seed Demo Data (auto-runs on first import)
 # -----------------------------------------------------------------------
+
+
+
+def get_settlements_by_status(statuses):
+    """Return settlements matching any of the given status values, as a DataFrame."""
+    import pandas as pd
+    _ensure_tables()
+    conn = _get_db()
+    try:
+        df = pd.read_sql(
+            "SELECT settlement_id, claim_ref, amount, net_amount, wht_amount, payee_name, payee_type, status, recommended_at, recommended_by FROM settlements WHERE status IN (" + ",".join(["?"] * len(statuses)) + ") ORDER BY recommended_at DESC",
+            conn,
+            params=statuses
+        )
+    finally:
+        conn.close()
+    return df
 
 def _seed_demo_data_if_empty():
     """Seed 45 Kenyan claims on first run. Run once via st.rerun scope."""
