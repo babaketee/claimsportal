@@ -1,58 +1,40 @@
 import streamlit as st
-import io
-import csv
-
-from core_api import _get_db
+import io, csv
 
 def _render_user_mgmt():
+    from core_api import get_claims
     st.subheader("User Management")
-    conn = _get_db()
-    try:
-        cur = conn.execute("SELECT client AS email, claim_type AS role, status AS active, date_filed AS created FROM claims_history ORDER BY date_filed DESC LIMIT 100")
-        rows = cur.fetchall()
-    except Exception as e:
-        st.info("No user records found.")
-        conn.close()
-        return
-    conn.close()
+    rows = get_claims()
     if not rows:
-        st.info("No user records found.")
+        st.info("No user records. Click 'Seed Database' in System Config to load demo data.")
         return
     st.data_editor(
-        [{"Email": str(r[0]), "Role": str(r[1]), "Active": str(r[2]), "Created": str(r[3])} for r in rows],
-        disabled=["Email", "Created"],
-        hide_index=True,
-        use_container_width=True,
+        [{"Email": str(r[1]), "Role": str(r[2]), "Status": str(r[5]), "Date": str(r[8])} for r in rows],
+        disabled=["Email", "Date"], hide_index=True, use_container_width=True,
     )
 
 def _render_role_config():
+    from core_api import get_claims
     st.subheader("Role Configuration")
-    conn = _get_db()
-    try:
-        cur = conn.execute("SELECT DISTINCT claim_type FROM claims_history")
-        roles = [r[0] for r in cur.fetchall()]
-    except Exception:
-        roles = []
-    conn.close()
+    rows = get_claims()
+    roles = sorted(set(r[2] for r in rows if r[2]))
     if not roles:
         st.info("No roles found.")
         return
     for role in roles:
-        with st.expander(str(role)):
-            st.text_input("Description", value=str(role).replace("_", " ").title(), key=f"role_desc_{role}")
+        with st.expander(role):
+            st.text_input("Description", value=role.replace("_", " ").title(), key=f"role_desc_{role}")
     if st.button("Save Role Config"):
         st.success("Role configuration saved.")
 
 def _render_api_config():
     st.subheader("API Configuration")
-    st.text_input("Core API URL", value="http://localhost:8000", disabled=True)
-    st.text_input("Analytics DB Host", placeholder="analytics-db.defassurance.co.ke")
-    st.text_input("Africastalking SMS API Key", type="password", placeholder="atsk_...")
-    st.text_input("M-Pesa Consumer Key", type="password", placeholder="...")
+    st.text_input("Core API URL", value="https://claimsapp-3giaczzzvijfdz4rv6d3og.streamlit.app", disabled=True)
     if st.button("Save API Config"):
         st.success("API configuration saved.")
 
 def _render_audit_log():
+    from core_api import _get_db
     st.subheader("Audit Log")
     conn = _get_db()
     try:
@@ -76,10 +58,8 @@ def _render_audit_log():
 
 def _render_view_permissions():
     st.subheader("View Permissions")
-    roles = ["client", "claims_officer", "head_of_claims", "assessor", "garage",
-             "investigator", "finance", "finance_head", "spare_parts", "legal", "admin"]
-    views = ["FNOL", "Claim Tracker", "Reserve Management", "Settlement", "Reports",
-             "Communications", "Document Manager", "Expert Assignment"]
+    roles = ["client","claims_officer","head_of_claims","assessor","garage","investigator","finance","finance_head","spare_parts","legal","admin"]
+    views = ["FNOL","Claim Tracker","Reserve Management","Settlement","Reports","Communications","Document Manager","Expert Assignment"]
     for role in roles:
         with st.expander(role):
             for view in views:
@@ -97,23 +77,35 @@ def _render_system_config():
     with col2:
         st.number_input("WHT Rate (%)", value=5.0, min_value=0.0, max_value=100.0, key="wht_rate")
         st.number_input("Reserve Warning Days", value=7, min_value=1, key="reserve_warning")
-    if st.button("Save System Config"):
-        st.success("System configuration saved.")
+
+    st.markdown("---")
+    st.subheader("Database Operations")
+
+    if st.button("Seed Database (45 Claims)", type="primary", use_container_width=True):
+        from core_api import seed_demo_data
+        result = seed_demo_data()
+        st.success(result)
+        st.rerun()
+
     st.markdown("---")
     st.subheader("Database Schema")
+    from core_api import _get_db
     conn = _get_db()
     try:
-        cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        cur = conn.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public'")
         tables = [r[0] for r in cur.fetchall()]
     except Exception:
         tables = []
     conn.close()
-    for t in tables:
-        st.text(f"- {t}")
+    if tables:
+        for t in tables:
+            st.text(f"- {t}")
+    else:
+        st.info("No tables found. Click 'Seed Database' above.")
 
 def render():
     st.header("Super Administrator")
-    tabs = st.tabs(["User Management", "Role Config", "API Config", "View Permissions", "Audit Log", "System Config"])
+    tabs = st.tabs(["User Management","Role Config","API Config","View Permissions","Audit Log","System Config"])
     with tabs[0]: _render_user_mgmt()
     with tabs[1]: _render_role_config()
     with tabs[2]: _render_api_config()
