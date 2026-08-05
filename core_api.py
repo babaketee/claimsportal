@@ -5,30 +5,20 @@ from typing import Optional
 _DB_PATH = "claims_history.db"
 
 def _get_db():
-    """Connect to PostgreSQL (Streamlit Cloud secrets) or SQLite fallback."""
-    database_url = ""
-    try:
-        database_url = str(st.secrets.get("DATABASE_URL", ""))
-    except Exception:
-        pass
-    if not database_url:
-        database_url = os.getenv("DATABASE_URL", "")
-    if database_url and not database_url.startswith("sqlite"):
-        import psycopg2
-        return psycopg2.connect(database_url)
+    """Connect to SQLite — the only reliable local store for Streamlit Cloud."""
     return sqlite3.connect(_DB_PATH)
 
 def _ensure_tables():
     conn = _get_db()
     cur = conn.cursor()
-    cur.execute("CREATE TABLE IF NOT EXISTS claims_history (id SERIAL PRIMARY KEY, claim_ref TEXT UNIQUE NOT NULL, client TEXT NOT NULL, claim_type TEXT NOT NULL, insurer TEXT, claim_cause TEXT, status TEXT NOT NULL DEFAULT 'Reported', location TEXT, vehicle_reg TEXT, date_filed TEXT, last_updated TEXT)")
-    cur.execute("CREATE TABLE IF NOT EXISTS status_history (id SERIAL PRIMARY KEY, claim_ref TEXT NOT NULL, action TEXT NOT NULL, user_email TEXT, timestamp TEXT NOT NULL, notes TEXT)")
-    cur.execute("CREATE TABLE IF NOT EXISTS reserves (id SERIAL PRIMARY KEY, claim_ref TEXT NOT NULL, reserve_amount REAL DEFAULT 0, amount_paid REAL DEFAULT 0, reserve_type TEXT, reason TEXT, status TEXT DEFAULT 'Active', set_by TEXT, set_date TEXT)")
-    cur.execute("CREATE TABLE IF NOT EXISTS diary_entries (id SERIAL PRIMARY KEY, claim_ref TEXT NOT NULL, entry_text TEXT, entry_date TEXT, entered_by TEXT, due_date TEXT, priority TEXT DEFAULT 'Medium', status TEXT DEFAULT 'Open')")
-    cur.execute("CREATE TABLE IF NOT EXISTS communications (id SERIAL PRIMARY KEY, claim_ref TEXT NOT NULL, direction TEXT, channel TEXT, recipient TEXT, message TEXT, sent_at TEXT, status TEXT DEFAULT 'Sent')")
-    cur.execute("CREATE TABLE IF NOT EXISTS expert_assignments (id SERIAL PRIMARY KEY, claim_ref TEXT NOT NULL, expert_name TEXT, expert_type TEXT, assigned_date TEXT, status TEXT DEFAULT 'Assigned', notes TEXT)")
-    cur.execute("CREATE TABLE IF NOT EXISTS claim_documents (id SERIAL PRIMARY KEY, claim_ref TEXT NOT NULL, doc_type TEXT, file_name TEXT, uploaded_at TEXT, uploaded_by TEXT)")
-    cur.execute("CREATE TABLE IF NOT EXISTS settlements (id SERIAL PRIMARY KEY, claim_ref TEXT NOT NULL, settlement_amount REAL DEFAULT 0, wht_amount REAL DEFAULT 0, net_amount REAL DEFAULT 0, settlement_date TEXT, settlement_type TEXT, status TEXT DEFAULT 'Recommended', approved_by TEXT, approved_date TEXT, bank_ref TEXT)")
+    cur.execute("CREATE TABLE IF NOT EXISTS claims_history (id INTEGER PRIMARY KEY AUTOINCREMENT, claim_ref TEXT UNIQUE NOT NULL, client TEXT NOT NULL, claim_type TEXT NOT NULL, insurer TEXT, claim_cause TEXT, status TEXT NOT NULL DEFAULT 'Reported', location TEXT, vehicle_reg TEXT, date_filed TEXT, last_updated TEXT)")
+    cur.execute("CREATE TABLE IF NOT EXISTS status_history (id INTEGER PRIMARY KEY AUTOINCREMENT, claim_ref TEXT NOT NULL, action TEXT NOT NULL, user_email TEXT, timestamp TEXT NOT NULL, notes TEXT)")
+    cur.execute("CREATE TABLE IF NOT EXISTS reserves (id INTEGER PRIMARY KEY AUTOINCREMENT, claim_ref TEXT NOT NULL, reserve_amount REAL DEFAULT 0, amount_paid REAL DEFAULT 0, reserve_type TEXT, reason TEXT, status TEXT DEFAULT 'Active', set_by TEXT, set_date TEXT)")
+    cur.execute("CREATE TABLE IF NOT EXISTS diary_entries (id INTEGER PRIMARY KEY AUTOINCREMENT, claim_ref TEXT NOT NULL, entry_text TEXT, entry_date TEXT, entered_by TEXT, due_date TEXT, priority TEXT DEFAULT 'Medium', status TEXT DEFAULT 'Open')")
+    cur.execute("CREATE TABLE IF NOT EXISTS communications (id INTEGER PRIMARY KEY AUTOINCREMENT, claim_ref TEXT NOT NULL, direction TEXT, channel TEXT, recipient TEXT, message TEXT, sent_at TEXT, status TEXT DEFAULT 'Sent')")
+    cur.execute("CREATE TABLE IF NOT EXISTS expert_assignments (id INTEGER PRIMARY KEY AUTOINCREMENT, claim_ref TEXT NOT NULL, expert_name TEXT, expert_type TEXT, assigned_date TEXT, status TEXT DEFAULT 'Assigned', notes TEXT)")
+    cur.execute("CREATE TABLE IF NOT EXISTS claim_documents (id INTEGER PRIMARY KEY AUTOINCREMENT, claim_ref TEXT NOT NULL, doc_type TEXT, file_name TEXT, uploaded_at TEXT, uploaded_by TEXT)")
+    cur.execute("CREATE TABLE IF NOT EXISTS settlements (id INTEGER PRIMARY KEY AUTOINCREMENT, claim_ref TEXT NOT NULL, settlement_amount REAL DEFAULT 0, wht_amount REAL DEFAULT 0, net_amount REAL DEFAULT 0, settlement_date TEXT, settlement_type TEXT, status TEXT DEFAULT 'Recommended', approved_by TEXT, approved_date TEXT, bank_ref TEXT)")
     conn.commit()
     cur.close()
     conn.close()
@@ -41,14 +31,14 @@ def get_claims(filters: Optional[dict] = None, user_email: str = None):
     params = []
     email = user_email if user_email else (filters.get("user_email") if filters else None)
     if email:
-        query += " AND client = %s"
+        query += " AND client = ?"
         params.append(email)
     if filters:
         if filters.get("claim_ref"):
-            query += " AND claim_ref LIKE %s"
+            query += " AND claim_ref LIKE ?"
             params.append(f"%{filters['claim_ref']}%")
         if filters.get("status"):
-            query += " AND status = %s"
+            query += " AND status = ?"
             params.append(filters["status"])
     query += " ORDER BY date_filed DESC LIMIT 200"
     cur.execute(query, params)
@@ -61,7 +51,7 @@ def get_claim(claim_ref):
     _ensure_tables()
     conn = _get_db()
     cur = conn.cursor()
-    cur.execute("SELECT claim_ref, client, claim_type, insurer, claim_cause, status, location, vehicle_reg, date_filed, last_updated FROM claims_history WHERE claim_ref = %s", (claim_ref,))
+    cur.execute("SELECT claim_ref, client, claim_type, insurer, claim_cause, status, location, vehicle_reg, date_filed, last_updated FROM claims_history WHERE claim_ref = ?", (claim_ref,))
     row = cur.fetchone()
     cur.close()
     conn.close()
@@ -72,7 +62,7 @@ def create_claim(claim_ref, client, claim_type, insurer, claim_cause, status, lo
     conn = _get_db()
     now = datetime.now().isoformat()
     cur = conn.cursor()
-    cur.execute("INSERT INTO claims_history (claim_ref, client, claim_type, insurer, claim_cause, status, location, vehicle_reg, date_filed, last_updated) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", (claim_ref, client, claim_type, insurer, claim_cause, status, location, vehicle_reg, now, now))
+    cur.execute("INSERT INTO claims_history (claim_ref, client, claim_type, insurer, claim_cause, status, location, vehicle_reg, date_filed, last_updated) VALUES (?,?,?,?,?,?,?,?,?,?)", (claim_ref, client, claim_type, insurer, claim_cause, status, location, vehicle_reg, now, now))
     conn.commit()
     cur.close()
     conn.close()
@@ -83,8 +73,8 @@ def update_claim_status(claim_ref, new_status, user_email=None):
     conn = _get_db()
     now = datetime.now().isoformat()
     cur = conn.cursor()
-    cur.execute("UPDATE claims_history SET status = %s, last_updated = %s WHERE claim_ref = %s", (new_status, now, claim_ref))
-    cur.execute("INSERT INTO status_history (claim_ref, action, user_email, timestamp, notes) VALUES (%s,%s,%s,%s,%s)", (claim_ref, f"Status changed to {new_status}", user_email or "system", now, ""))
+    cur.execute("UPDATE claims_history SET status = ?, last_updated = ? WHERE claim_ref = ?", (new_status, now, claim_ref))
+    cur.execute("INSERT INTO status_history (claim_ref, action, user_email, timestamp, notes) VALUES (?,?,?,?,?)", (claim_ref, f"Status changed to {new_status}", user_email or "system", now, ""))
     conn.commit()
     cur.close()
     conn.close()
@@ -94,7 +84,7 @@ def set_reserve(claim_ref, amount, reserve_type, reason, set_by="system"):
     conn = _get_db()
     now = datetime.now().isoformat()
     cur = conn.cursor()
-    cur.execute("INSERT INTO reserves (claim_ref, reserve_amount, amount_paid, reserve_type, reason, status, set_by, set_date) VALUES (%s,%s,0,%s,%s,'Active',%s,%s)", (claim_ref, amount, reserve_type, reason, set_by, now))
+    cur.execute("INSERT INTO reserves (claim_ref, reserve_amount, amount_paid, reserve_type, reason, status, set_by, set_date) VALUES (?,?,0,?,?,'Active',?,?)", (claim_ref, amount, reserve_type, reason, set_by, now))
     conn.commit()
     cur.close()
     conn.close()
@@ -103,7 +93,7 @@ def get_reserves(claim_ref):
     _ensure_tables()
     conn = _get_db()
     cur = conn.cursor()
-    cur.execute("SELECT id, reserve_amount, amount_paid, reserve_type, reason, status, set_by, set_date FROM reserves WHERE claim_ref = %s ORDER BY set_date DESC", (claim_ref,))
+    cur.execute("SELECT id, reserve_amount, amount_paid, reserve_type, reason, status, set_by, set_date FROM reserves WHERE claim_ref = ? ORDER BY set_date DESC", (claim_ref,))
     rows = cur.fetchall()
     cur.close()
     conn.close()
@@ -114,7 +104,7 @@ def add_diary_entry(claim_ref, entry_text, entered_by, due_date=None, priority="
     conn = _get_db()
     now = datetime.now().isoformat()
     cur = conn.cursor()
-    cur.execute("INSERT INTO diary_entries (claim_ref, entry_text, entry_date, entered_by, due_date, priority, status) VALUES (%s,%s,%s,%s,%s,%s,'Open')", (claim_ref, entry_text, now, entered_by, due_date, priority))
+    cur.execute("INSERT INTO diary_entries (claim_ref, entry_text, entry_date, entered_by, due_date, priority, status) VALUES (?,?,?,?,?,'Open')", (claim_ref, entry_text, now, entered_by, due_date, priority))
     conn.commit()
     cur.close()
     conn.close()
@@ -123,7 +113,7 @@ def get_diary_entries(claim_ref):
     _ensure_tables()
     conn = _get_db()
     cur = conn.cursor()
-    cur.execute("SELECT id, entry_text, entry_date, entered_by, due_date, priority, status FROM diary_entries WHERE claim_ref = %s ORDER BY entry_date DESC", (claim_ref,))
+    cur.execute("SELECT id, entry_text, entry_date, entered_by, due_date, priority, status FROM diary_entries WHERE claim_ref = ? ORDER BY entry_date DESC", (claim_ref,))
     rows = cur.fetchall()
     cur.close()
     conn.close()
@@ -133,7 +123,7 @@ def get_overdue_entries():
     _ensure_tables()
     conn = _get_db()
     cur = conn.cursor()
-    cur.execute("SELECT id, claim_ref, entry_text, due_date, priority, status FROM diary_entries WHERE status='Open' AND due_date < CURRENT_DATE ORDER BY due_date ASC")
+    cur.execute("SELECT id, claim_ref, entry_text, due_date, priority, status FROM diary_entries WHERE status='Open' ORDER BY due_date ASC")
     rows = cur.fetchall()
     cur.close()
     conn.close()
@@ -144,7 +134,7 @@ def log_communication(claim_ref, direction, channel, recipient, message):
     conn = _get_db()
     now = datetime.now().isoformat()
     cur = conn.cursor()
-    cur.execute("INSERT INTO communications (claim_ref, direction, channel, recipient, message, sent_at, status) VALUES (%s,%s,%s,%s,%s,%s,'Sent')", (claim_ref, direction, channel, recipient, message, now))
+    cur.execute("INSERT INTO communications (claim_ref, direction, channel, recipient, message, sent_at, status) VALUES (?,?,?,?,?,?,'Sent')", (claim_ref, direction, channel, recipient, message, now))
     conn.commit()
     cur.close()
     conn.close()
@@ -154,7 +144,7 @@ def assign_expert(claim_ref, expert_name, expert_type):
     conn = _get_db()
     now = datetime.now().isoformat()
     cur = conn.cursor()
-    cur.execute("INSERT INTO expert_assignments (claim_ref, expert_name, expert_type, assigned_date, status) VALUES (%s,%s,%s,%s,'Assigned')", (claim_ref, expert_name, expert_type, now))
+    cur.execute("INSERT INTO expert_assignments (claim_ref, expert_name, expert_type, assigned_date, status) VALUES (?,?,?,?,'Assigned')", (claim_ref, expert_name, expert_type, now))
     conn.commit()
     cur.close()
     conn.close()
@@ -166,10 +156,10 @@ def get_assignments(claim_ref=None, expert_type=None):
     query = "SELECT id, claim_ref, expert_name, expert_type, assigned_date, status, notes FROM expert_assignments WHERE 1=1"
     params = []
     if claim_ref:
-        query += " AND claim_ref = %s"
+        query += " AND claim_ref = ?"
         params.append(claim_ref)
     if expert_type:
-        query += " AND expert_type = %s"
+        query += " AND expert_type = ?"
         params.append(expert_type)
     query += " ORDER BY assigned_date DESC"
     cur.execute(query, params)
@@ -182,7 +172,7 @@ def update_assignment_status(assignment_id, new_status):
     _ensure_tables()
     conn = _get_db()
     cur = conn.cursor()
-    cur.execute("UPDATE expert_assignments SET status = %s WHERE id = %s", (new_status, assignment_id))
+    cur.execute("UPDATE expert_assignments SET status = ? WHERE id = ?", (new_status, assignment_id))
     conn.commit()
     cur.close()
     conn.close()
@@ -194,7 +184,7 @@ def recommend_settlement(claim_ref, amount, settlement_type, approved_by=None):
     wht = round(amount * 0.05, 2)
     net = round(amount - wht, 2)
     cur = conn.cursor()
-    cur.execute("INSERT INTO settlements (claim_ref, settlement_amount, wht_amount, net_amount, settlement_date, settlement_type, status, approved_by, approved_date) VALUES (%s,%s,%s,%s,%s,%s,'Recommended',%s,%s)", (claim_ref, amount, wht, net, now, settlement_type, approved_by, now))
+    cur.execute("INSERT INTO settlements (claim_ref, settlement_amount, wht_amount, net_amount, settlement_date, settlement_type, status, approved_by, approved_date) VALUES (?,?,?,?,?,?,'Recommended',?,?)", (claim_ref, amount, wht, net, now, settlement_type, approved_by, now))
     conn.commit()
     cur.close()
     conn.close()
@@ -205,9 +195,9 @@ def mark_settlement_paid(settlement_id, bank_ref=None):
     now = datetime.now().isoformat()
     cur = conn.cursor()
     if bank_ref:
-        cur.execute("UPDATE settlements SET status='Paid', settlement_date=%s, bank_ref=%s WHERE id=%s", (now, bank_ref, settlement_id))
+        cur.execute("UPDATE settlements SET status='Paid', settlement_date=?, bank_ref=? WHERE id=?", (now, bank_ref, settlement_id))
     else:
-        cur.execute("UPDATE settlements SET status='Paid', settlement_date=%s WHERE id=%s", (now, settlement_id))
+        cur.execute("UPDATE settlements SET status='Paid', settlement_date=? WHERE id=?", (now, settlement_id))
     conn.commit()
     cur.close()
     conn.close()
@@ -216,7 +206,7 @@ def get_settlements(claim_ref):
     _ensure_tables()
     conn = _get_db()
     cur = conn.cursor()
-    cur.execute("SELECT id, settlement_amount, wht_amount, net_amount, settlement_date, settlement_type, status, approved_by, approved_date FROM settlements WHERE claim_ref = %s ORDER BY settlement_date DESC", (claim_ref,))
+    cur.execute("SELECT id, settlement_amount, wht_amount, net_amount, settlement_date, settlement_type, status, approved_by, approved_date FROM settlements WHERE claim_ref = ? ORDER BY settlement_date DESC", (claim_ref,))
     rows = cur.fetchall()
     cur.close()
     conn.close()
@@ -227,7 +217,7 @@ def get_settlements_by_status(statuses):
     _ensure_tables()
     conn = _get_db()
     try:
-        placeholders = ",".join(["%s"] * len(statuses))
+        placeholders = ",".join(["?"] * len(statuses))
         df = pd.read_sql_query(f"SELECT s.id, s.claim_ref, s.settlement_amount, s.wht_amount, s.net_amount, s.settlement_date, s.settlement_type, s.status, s.approved_by, s.approved_date, c.client AS payee_name FROM settlements s JOIN claims_history c ON s.claim_ref = c.claim_ref WHERE s.status IN ({placeholders}) ORDER BY s.settlement_date DESC", conn, params=statuses)
         conn.close()
         return df
@@ -240,7 +230,7 @@ def register_document(claim_ref, doc_type, file_name, uploaded_by="system"):
     conn = _get_db()
     now = datetime.now().isoformat()
     cur = conn.cursor()
-    cur.execute("INSERT INTO claim_documents (claim_ref, doc_type, file_name, uploaded_at, uploaded_by) VALUES (%s,%s,%s,%s,%s)", (claim_ref, doc_type, file_name, now, uploaded_by))
+    cur.execute("INSERT INTO claim_documents (claim_ref, doc_type, file_name, uploaded_at, uploaded_by) VALUES (?,?,?,?,?)", (claim_ref, doc_type, file_name, now, uploaded_by))
     conn.commit()
     cur.close()
     conn.close()
@@ -249,7 +239,7 @@ def get_documents(claim_ref):
     _ensure_tables()
     conn = _get_db()
     cur = conn.cursor()
-    cur.execute("SELECT id, doc_type, file_name, uploaded_at, uploaded_by FROM claim_documents WHERE claim_ref = %s ORDER BY uploaded_at DESC", (claim_ref,))
+    cur.execute("SELECT id, doc_type, file_name, uploaded_at, uploaded_by FROM claim_documents WHERE claim_ref = ? ORDER BY uploaded_at DESC", (claim_ref,))
     rows = cur.fetchall()
     cur.close()
     conn.close()
@@ -259,19 +249,19 @@ def get_timeline(claim_ref):
     _ensure_tables()
     conn = _get_db()
     cur = conn.cursor()
-    cur.execute("SELECT id, action, user_email, timestamp, notes FROM status_history WHERE claim_ref = %s ORDER BY timestamp ASC", (claim_ref,))
+    cur.execute("SELECT id, action, user_email, timestamp, notes FROM status_history WHERE claim_ref = ? ORDER BY timestamp ASC", (claim_ref,))
     rows = cur.fetchall()
     cur.close()
     conn.close()
     return rows
 
 def seed_demo_data():
-    """Seed 45 Kenyan claims. Call this from the UI if auto-seed missed."""
+    """Seed 45 Kenyan claims. Motor (MTR) + Business (BSN)."""
     _ensure_tables()
     conn = _get_db()
     cur = conn.cursor()
     cur.execute("SELECT COUNT(*) FROM claims_history")
-    if cur.fetchone()[0] > 0:
+    if (cur.fetchone() or [0])[0] > 0:
         cur.close()
         conn.close()
         return "Already seeded"
@@ -332,18 +322,17 @@ def seed_demo_data():
     cur = conn.cursor()
 
     for c in motor + business:
-        cur.execute("INSERT INTO claims_history (claim_ref, client, claim_type, insurer, claim_cause, status, location, vehicle_reg, date_filed, last_updated) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", (*c, now, now))
+        cur.execute("INSERT INTO claims_history (claim_ref, client, claim_type, insurer, claim_cause, status, location, vehicle_reg, date_filed, last_updated) VALUES (?,?,?,?,?,?,?,?,?,?)", (*c, now, now))
 
     for c in motor + business:
-        cur.execute("INSERT INTO reserves (claim_ref, reserve_amount, amount_paid, reserve_type, reason, status, set_by, set_date) VALUES (%s,%s,0,'Initial Reserve','Claim assessment','Active','system',%s)", (c[0], random.randint(50000, 500000), now))
+        cur.execute("INSERT INTO reserves (claim_ref, reserve_amount, amount_paid, reserve_type, reason, status, set_by, set_date) VALUES (?,?,0,'Initial Reserve','Claim assessment','Active','system',?)", (c[0], random.randint(50000, 500000), now))
 
     for c in motor + business:
-        cur.execute("INSERT INTO status_history (claim_ref, action, user_email, timestamp, notes) VALUES (%s,'Claim Reported','system',%s,'Initial claim registration')", (c[0], now))
+        cur.execute("INSERT INTO status_history (claim_ref, action, user_email, timestamp, notes) VALUES (?,'Claim Reported','system',?,'Initial claim registration')", (c[0], now))
 
     conn.commit()
     cur.close()
     conn.close()
     return "Seeded 45 claims"
 
-# NOTE: seed_demo_data() is NOT called automatically on import.
-# Call it manually from the Super Admin UI if the auto-seed missed.
+# NOTE: seed_demo_data() is NOT called on import — call it manually from Super Admin > System Config
