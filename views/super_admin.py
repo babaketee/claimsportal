@@ -92,7 +92,7 @@ def _render_system_config():
     from core_api import _get_db
     conn = _get_db()
     try:
-        cur = conn.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public'")
+        cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
         tables = [r[0] for r in cur.fetchall()]
     except Exception:
         tables = []
@@ -101,7 +101,7 @@ def _render_system_config():
         for t in tables:
             st.text(f"- {t}")
     else:
-        st.info("No tables found. Click 'Seed Database' above.")
+        st.info("No tables yet.")
 
 def render():
     st.header("Super Administrator")
