@@ -1,173 +1,117 @@
-"""Internal Admin Dashboard — claims overview, SLA monitoring, and portfolio analytics."""
-from __future__ import annotations
-
-import datetime
-
-import pandas as pd
+import sqlite3
 import streamlit as st
-from views.analytics_charts import render_analytics, clear_cache as _clear_analytics_cache
+import pandas as pd
+from datetime import datetime, date
 
-# SQLite-backed — Delta warehouse removed
+DB_PATH = "claims_history.db"
 
+def _get_db():
+    return sqlite3.connect(DB_PATH)
 
-# ---------------------------------------------------------------------------
-# SQL execution helper — deprecated, returns empty DataFrame
-# ---------------------------------------------------------------------------
+def _metric_card(label, value, delta=None):
+    st.metric(label, value, delta=delta)
 
-def _run_sql(sql: str) -> pd.DataFrame:
-    """Deprecated — Delta warehouse removed. Dashboard degrades gracefully."""
-    return pd.DataFrame()
+def _render_kpis():
+    col1, col2, col3, col4 = st.columns(4)
+    conn = _get_db()
+    try:
+        cur = conn.execute("SELECT COUNT(*) FROM claims_history")
+        total = cur.fetchone()[0] or 0
+    except Exception:
+        total = 0
+    try:
+        cur2 = conn.execute("SELECT COUNT(*) FROM claims_history WHERE status LIKE '%Closed%'")
+        closed = cur2.fetchone()[0] or 0
+    except Exception:
+        closed = 0
+    try:
+        cur3 = conn.execute("SELECT COUNT(*) FROM claims_history WHERE status LIKE '%Reported%'")
+        open_ = cur3.fetchone()[0] or 0
+    except Exception:
+        open_ = 0
+    try:
+        cur4 = conn.execute("SELECT SUM(reserve_amount) FROM reserves WHERE status='Active'")
+        reserves = cur4.fetchone()[0] or 0
+    except Exception:
+        reserves = 0
+    conn.close()
+    col1.metric("Total Claims", total)
+    col2.metric("Closed", closed)
+    col3.metric("Open", open_)
+    col4.metric("Active Reserves (KES)", f"{reserves:,.0f}")
 
-
-# ---------------------------------------------------------------------------
-# Cached data loaders  (TTL 60 s) — return empty, will be refactored to SQLite
-# ---------------------------------------------------------------------------
-
-@st.cache_data(ttl=60, show_spinner=False)
-def _load_status_counts() -> pd.DataFrame:
-    return pd.DataFrame()
-
-
-@st.cache_data(ttl=60, show_spinner=False)
-def _load_type_distribution() -> pd.DataFrame:
-    return pd.DataFrame()
-
-
-@st.cache_data(ttl=60, show_spinner=False)
-def _load_daily_trend() -> pd.DataFrame:
-    return pd.DataFrame()
-
-
-@st.cache_data(ttl=60, show_spinner=False)
-def _load_all_claims(
-    status_filter: str, type_filter: str,
-    date_from: str, date_to: str,
-) -> pd.DataFrame:
-    return pd.DataFrame()
-
-
-@st.cache_data(ttl=60, show_spinner=False)
-def _load_sla() -> pd.DataFrame:
-    return pd.DataFrame()
-
-
-@st.cache_data(ttl=120, show_spinner=False)
-def _load_vendors() -> pd.DataFrame:
-    return pd.DataFrame()
-
-
-@st.cache_data(ttl=30, show_spinner=False)
-def _load_audit_log() -> pd.DataFrame:
-    return pd.DataFrame()
-
-
-def _refresh_all() -> None:
-    """Clear all cached loaders and rerun the page."""
-    _load_status_counts.clear()      # type: ignore[attr-defined]
-    _load_type_distribution.clear()  # type: ignore[attr-defined]
-    _load_daily_trend.clear()        # type: ignore[attr-defined]
-    _load_all_claims.clear()         # type: ignore[attr-defined]
-    _load_sla.clear()                # type: ignore[attr-defined]
-    _load_vendors.clear()            # type: ignore[attr-defined]
-    _load_audit_log.clear()          # type: ignore[attr-defined]
-    _clear_analytics_cache()
-    st.rerun()
-
-
-# ---------------------------------------------------------------------------
-# Page entry point
-# ---------------------------------------------------------------------------
-
-def render() -> None:
-    col_title, col_btn = st.columns([5, 1])
-    col_title.title("\u2699\ufe0f Internal Claims Dashboard")
-    if col_btn.button("\U0001f504 Refresh", use_container_width=True, help="Force-refresh all data"):
-        _refresh_all()
-    st.caption("SQLite-backed \u00b7 auto-refreshes every 60 seconds.")
-
-    tabs = st.tabs(
-        ["\U0001f4ca Overview", "\U0001f4cb All Claims", "\U0001f3e2 Vendor Management",
-         "\U0001f575\ufe0f Audit Log", "\u26a0\ufe0f SLA Monitor", "\U0001f4c8 Analytics"]
-    )
-    with tabs[0]: _overview()
-    with tabs[1]: _all_claims()
-    with tabs[2]: _vendor_management()
-    with tabs[3]: _audit_log()
-    with tabs[4]: _sla_monitor()
-    with tabs[5]: _analytics()
-
-
-# ---------------------------------------------------------------------------
-# Analytics
-# ---------------------------------------------------------------------------
-
-def _analytics() -> None:
-    st.subheader("Portfolio Analytics")
-    st.caption("Analytics via SQLite \u00b7 60-second cache.")
-    render_analytics(show_refresh=False)
-
-
-# ---------------------------------------------------------------------------
-# Overview
-# ---------------------------------------------------------------------------
-
-def _overview() -> None:
-    st.subheader("Claims Overview")
-    st.info("Dashboard is being migrated to SQLite. Data loaders will return empty until refactored.")
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total Open Claims",  0)
-    c2.metric("Pending Assessment", 0)
-    c3.metric("Under Assessment",   0)
-    c4.metric("Settled This Month", 0)
-
-
-# ---------------------------------------------------------------------------
-# All Claims
-# ---------------------------------------------------------------------------
-
-def _all_claims() -> None:
+def _render_claims_table():
     st.subheader("All Claims")
-    st.info("Refactoring to SQLite in progress.")
+    conn = _get_db()
+    try:
+        cur = conn.execute("SELECT claim_ref, client, claim_type, status, location, date_filed FROM claims_history ORDER BY date_filed DESC LIMIT 100")
+        rows = cur.fetchall()
+    except Exception:
+        st.info("No claims found.")
+        conn.close()
+        return
+    conn.close()
+    if not rows:
+        st.info("No claims found.")
+        return
+    df = pd.DataFrame(rows, columns=["Claim Ref", "Client", "Type", "Status", "Location", "Date Filed"])
+    st.dataframe(df, use_container_width=True, hide_index=True)
 
+def _render_status_breakdown():
+    st.subheader("Claims by Status")
+    conn = _get_db()
+    try:
+        cur = conn.execute("SELECT status, COUNT(*) FROM claims_history GROUP BY status ORDER BY COUNT(*) DESC")
+        rows = cur.fetchall()
+    except Exception:
+        rows = []
+    conn.close()
+    if not rows:
+        st.info("No status data available.")
+        return
+    df = pd.DataFrame(rows, columns=["Status", "Count"])
+    st.dataframe(df, use_container_width=True, hide_index=True)
 
-# ---------------------------------------------------------------------------
-# Vendor Management
-# ---------------------------------------------------------------------------
+def _render_type_breakdown():
+    st.subheader("Claims by Type")
+    conn = _get_db()
+    try:
+        cur = conn.execute("SELECT claim_type, COUNT(*) FROM claims_history GROUP BY claim_type ORDER BY COUNT(*) DESC")
+        rows = cur.fetchall()
+    except Exception:
+        rows = []
+    conn.close()
+    if not rows:
+        st.info("No type data available.")
+        return
+    df = pd.DataFrame(rows, columns=["Claim Type", "Count"])
+    st.dataframe(df, use_container_width=True, hide_index=True)
 
-def _vendor_management() -> None:
-    st.subheader("Vendor / Service Provider Management")
-    st.info("Refactoring to SQLite in progress.")
+def _render_recent_activity():
+    st.subheader("Recent Activity")
+    conn = _get_db()
+    try:
+        cur = conn.execute("SELECT claim_ref, action, user_email, timestamp FROM status_history ORDER BY timestamp DESC LIMIT 20")
+        rows = cur.fetchall()
+    except Exception:
+        rows = []
+    conn.close()
+    if not rows:
+        st.info("No recent activity found.")
+        return
+    df = pd.DataFrame(rows, columns=["Claim Ref", "Action", "User", "Timestamp"])
+    st.dataframe(df, use_container_width=True, hide_index=True)
 
-
-# ---------------------------------------------------------------------------
-# Audit Log
-# ---------------------------------------------------------------------------
-
-def _audit_log() -> None:
-    st.subheader("Audit Log")
-    st.info("Refactoring to SQLite in progress.")
-
-
-# ---------------------------------------------------------------------------
-# SLA Monitor
-# ---------------------------------------------------------------------------
-
-def _sla_monitor() -> None:
-    st.subheader("SLA Monitor")
-    st.info("Refactoring to SQLite in progress.")
-
-
-# ---------------------------------------------------------------------------
-# SLA Thresholds (reference)
-# ---------------------------------------------------------------------------
-
-def _sla_thresholds() -> None:
-    st.markdown("**SLA Thresholds (reference)**")
-    thresholds = [
-        {"Stage": "Assessor Assignment",        "SLA": "4 business hours after FNOL"},
-        {"Stage": "Assessment Completion",       "SLA": "48 hours after appointment"},
-        {"Stage": "Garage Estimate Submission",  "SLA": "48 hours after repair authorisation"},
-        {"Stage": "Invoice Payment",             "SLA": "7 business days after invoice receipt"},
-        {"Stage": "Final Settlement",            "SLA": "30 days from date of loss"},
-    ]
-    st.dataframe(thresholds, use_container_width=True, hide_index=True)
+def render():
+    st.header("Admin Dashboard")
+    _render_kpis()
+    st.markdown("---")
+    tab1, tab2, tab3, tab4 = st.tabs(["All Claims", "By Status", "By Type", "Recent Activity"])
+    with tab1:
+        _render_claims_table()
+    with tab2:
+        _render_status_breakdown()
+    with tab3:
+        _render_type_breakdown()
+    with tab4:
+        _render_recent_activity()
