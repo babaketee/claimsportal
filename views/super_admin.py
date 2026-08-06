@@ -1,105 +1,74 @@
 import streamlit as st
-import io, csv
+from core_api import get_claims, seed_demo_data
 
 def _render_user_mgmt():
     from core_api import get_claims
     st.subheader("User Management")
     rows = get_claims()
     if not rows:
-        st.info("No user records. Click 'Seed Database' in System Config to load demo data.")
+        st.info("No user records. Click 'Seed Database' in System Config.")
         return
-    st.data_editor(
-        [{"Email": str(r[1]), "Role": str(r[2]), "Status": str(r[5]), "Date": str(r[8])} for r in rows],
-        disabled=["Email", "Date"], hide_index=True, use_container_width=True,
-    )
+    import pandas as pd
+    df = pd.DataFrame(rows, columns=["Claim Ref","Client","Type","Insurer","Cause","Status","Location","Vehicle","Date Filed","Last Updated"])
+    st.dataframe(df, use_container_width=True, hide_index=True)
 
 def _render_role_config():
-    from core_api import get_claims
     st.subheader("Role Configuration")
-    rows = get_claims()
-    roles = sorted(set(r[2] for r in rows if r[2]))
-    if not roles:
-        st.info("No roles found.")
-        return
-    for role in roles:
-        with st.expander(role):
-            st.text_input("Description", value=role.replace("_", " ").title(), key=f"role_desc_{role}")
-    if st.button("Save Role Config"):
-        st.success("Role configuration saved.")
+    roles = {
+        "client": "Client Portal",
+        "claims_officer": "Claims Officer",
+        "head_of_claims": "Head of Claims",
+        "assessor": "Assessor",
+        "garage": "Garage / Workshop",
+        "investigator": "Investigator",
+        "finance": "Finance Officer",
+        "finance_head": "Finance Head / CFO",
+        "spare_parts": "Spare Parts Provider",
+        "legal": "Legal Counsel",
+        "admin": "System Administrator",
+        "super_admin": "Super Administrator",
+    }
+    for role, label in roles.items():
+        st.markdown(f"**{label}** — `{role}@insure.demo`")
 
 def _render_api_config():
     st.subheader("API Configuration")
-    st.text_input("Core API URL", value="https://claimsapp-3giaczzzvijfdz4rv6d3og.streamlit.app", disabled=True)
-    if st.button("Save API Config"):
-        st.success("API configuration saved.")
-
-def _render_audit_log():
-    from core_api import _get_db
-    st.subheader("Audit Log")
-    conn = _get_db()
-    try:
-        cur = conn.execute("SELECT claim_ref, action, user_email, timestamp FROM status_history ORDER BY timestamp DESC LIMIT 200")
-        rows = cur.fetchall()
-    except Exception:
-        st.info("No audit records found.")
-        conn.close()
-        return
-    conn.close()
-    if not rows:
-        st.info("No audit records found.")
-        return
-    data = [{"Claim": str(r[0]), "Action": str(r[1]), "User": str(r[2]), "Timestamp": str(r[3])} for r in rows]
-    st.dataframe(data, use_container_width=True)
-    buf = io.StringIO()
-    w = csv.DictWriter(buf, fieldnames=["Claim", "Action", "User", "Timestamp"])
-    w.writeheader()
-    w.writerows(data)
-    st.download_button("Download CSV", buf.getvalue(), "audit_log.csv", "text/csv")
+    st.info("API keys managed centrally. Contact the system administrator.")
+    st.text_input("API Endpoint", value="https://api.definiteassurance.co.ke", disabled=True)
+    st.text_input("API Version", value="v1", disabled=True)
 
 def _render_view_permissions():
     st.subheader("View Permissions")
-    roles = ["client","claims_officer","head_of_claims","assessor","garage","investigator","finance","finance_head","spare_parts","legal","admin"]
-    views = ["FNOL","Claim Tracker","Reserve Management","Settlement","Reports","Communications","Document Manager","Expert Assignment"]
-    for role in roles:
-        with st.expander(role):
-            for view in views:
-                st.checkbox(view, value=True, key=f"perm_{role}_{view}")
-    if st.button("Save Permissions"):
-        st.success("Permissions saved.")
+    st.info("Role-based access control is enforced at authentication.")
+
+def _render_audit_log():
+    st.subheader("Audit Log")
+    from core_api import get_timeline
+    rows = get_timeline("MTR-2026-0001")
+    if not rows:
+        st.info("No audit records.")
+        return
+    import pandas as pd
+    df = pd.DataFrame(rows, columns=["ID","Action","User","Timestamp","Notes"])
+    st.dataframe(df, use_container_width=True, hide_index=True)
 
 def _render_system_config():
     st.subheader("System Configuration")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.number_input("SLA Days (Motor)", value=14, min_value=1, key="sla_motor")
-        st.number_input("SLA Days (Business)", value=21, min_value=1, key="sla_business")
-        st.number_input("Reinsurance Threshold (KES)", value=2000000, min_value=0, step=100000, key="reinsurance_threshold")
-    with col2:
-        st.number_input("WHT Rate (%)", value=5.0, min_value=0.0, max_value=100.0, key="wht_rate")
-        st.number_input("Reserve Warning Days", value=7, min_value=1, key="reserve_warning")
-
-    st.markdown("---")
-    st.subheader("Database Operations")
-
-    if st.button("Seed Database (45 Claims)", type="primary", use_container_width=True):
+    if st.button("Seed Database (45 Claims)"):
         from core_api import seed_demo_data
         result = seed_demo_data()
         st.success(result)
-        st.rerun()
-
-    st.markdown("---")
-    st.subheader("Database Schema")
+    if st.button("Rebuild Tables"):
+        from core_api import _ensure_tables
+        _ensure_tables()
+        st.success("Tables rebuilt.")
     from core_api import _get_db
     conn = _get_db()
-    try:
-        cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
-        tables = [r[0] for r in cur.fetchall()]
-    except Exception:
-        tables = []
+    cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+    tables = cur.fetchall()
     conn.close()
     if tables:
-        for t in tables:
-            st.text(f"- {t}")
+        st.write("Tables:", ", ".join([r[0] for r in tables]))
     else:
         st.info("No tables yet.")
 
