@@ -14,6 +14,7 @@ Exchanges:
 
 from __future__ import annotations
 
+import io
 import sqlite3
 import uuid
 import random
@@ -21,8 +22,6 @@ from datetime import datetime, timezone
 from typing import Any
 
 _DB_PATH = "claims_portal.db"
-
-# ─── Demo data store (Phase 1 — replace with real API calls in production) ────
 
 DEMO_POLICIES = [
     {"policy_ref": "POL-MOT-2026-001", "product": "Motor Comprehensive", "id_number": "12345678","vehicle_reg": "KBZ 000A",  "sum_insured": 2_500_000, "premium_status": "paid", "cover_start": "2026-01-01", "cover_end": "2026-12-31"},
@@ -34,14 +33,8 @@ DEMO_POLICIES = [
 
 DEMO_VEHICLES = {p["vehicle_reg"]: p for p in DEMO_POLICIES if p.get("vehicle_reg")}
 
-# ─── Policy verification ─────────────────────────────────────────────────────────
 
 def verify_policy(identity: str) -> dict | None:
-    """
-    Lookup policy by ID number, passport number, or policy reference.
-    Phase 1: searches DEMO_POLICIES.
-    Production: calls core system Exchange 1 — GET /policies?identity=ID
-    """
     for p in DEMO_POLICIES:
         if (p["id_number"] == identity or
             p["policy_ref"].lower() == identity.lower() or
@@ -51,37 +44,20 @@ def verify_policy(identity: str) -> dict | None:
 
 
 def verify_vehicle_reg(reg: str) -> dict | None:
-    """
-    Third-party vehicle lookup by registration number.
-    Returns policy info if the vehicle is insured with Definite Assurance.
-    Used for third-party claimant guest intake (R1).
-    Phase 1: searches DEMO_VEHICLES.
-    Production: calls core system — GET /vehicles?reg=KBZ000A
-    """
     key = reg.upper().replace(" ", "")
     return DEMO_VEHICLES.get(key)
 
 
 def get_policy(policy_ref: str) -> dict | None:
-    """Get full policy record by reference."""
     for p in DEMO_POLICIES:
         if p["policy_ref"] == policy_ref:
             return p
     return None
 
 
-# ─── Claim notification ─────────────────────────────────────────────────────────
-
 def notify_claim(claim_ref: str, policy_ref: str, payload: dict) -> dict:
-    """
-    Register a claim with the core system (Exchange 2).
-    Phase 1: logs to SQLite demo_claims table.
-    Production: POST /claims/notification with idempotency key.
-    """
     conn = sqlite3.connect(_DB_PATH, timeout=10)
-    cur = conn.execute(
-        "SELECT 1 FROM demo_claims WHERE claim_ref=?", (claim_ref,)
-    )
+    cur = conn.execute("SELECT 1 FROM demo_claims WHERE claim_ref=?", (claim_ref,))
     if not cur.fetchone():
         conn.execute(
             "INSERT INTO demo_claims (claim_ref, policy_ref, status, created_at) VALUES (?, ?, ?, ?)",
@@ -92,15 +68,7 @@ def notify_claim(claim_ref: str, policy_ref: str, payload: dict) -> dict:
     return {"success": True, "claim_ref": claim_ref, "policy_ref": policy_ref}
 
 
-# ─── Reserve movements (R3) ──────────────────────────────────────────────────────
-
 def reserve_movement(claim_ref: str, movement_type: str, amount: float, currency: str = "KES") -> dict:
-    """
-    Record a reserve movement on a claim.
-    movement_type: "initial" | "revision" | "release"
-    Phase 1: logs to SQLite reserve_movements table.
-    Production: calls core system — PATCH /claims/{ref}/reserve
-    """
     conn = sqlite3.connect(_DB_PATH, timeout=10)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS reserve_movements (
@@ -122,13 +90,7 @@ def reserve_movement(claim_ref: str, movement_type: str, amount: float, currency
     return {"success": True, "claim_ref": claim_ref, "movement_type": movement_type, "amount": amount}
 
 
-# ─── Inbound webhook stubs (Exchanges 3 & 5 — core → portal) ──────────────────
-
 def receive_triage_decision(claim_ref: str, triage_decision: str, assigned_to: str) -> dict:
-    """
-    Exchange 3: Core → Portal. Push triage/routing decision.
-    decision: "fast_track" | "standard" | "escalated"
-    """
     conn = sqlite3.connect(_DB_PATH, timeout=10)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS triage_decisions (
@@ -149,11 +111,6 @@ def receive_triage_decision(claim_ref: str, triage_decision: str, assigned_to: s
 
 
 def receive_approval_decision(claim_ref: str, decision: str, payout_amount: float | None, reason_code: str | None, approver_id: str) -> dict:
-    """
-    Exchange 5: Core → Portal. Push approval or repudiation decision.
-    decision: "approved" | "repudiated"
-    Must be idempotent — calling twice with same decision returns success both times.
-    """
     conn = sqlite3.connect(_DB_PATH, timeout=10)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS approval_decisions (
@@ -166,7 +123,6 @@ def receive_approval_decision(claim_ref: str, decision: str, payout_amount: floa
             received_at TEXT NOT NULL
         )
     """)
-    # Idempotent — use INSERT OR REPLACE
     conn.execute(
         "INSERT OR REPLACE INTO approval_decisions (claim_ref, decision, payout_amount, reason_code, approver_id, received_at) VALUES (?, ?, ?, ?, ?, ?)",
         (claim_ref, decision, payout_amount, reason_code, approver_id, datetime.now(timezone.utc).isoformat())
@@ -176,7 +132,80 @@ def receive_approval_decision(claim_ref: str, decision: str, payout_amount: floa
     return {"success": True, "claim_ref": claim_ref, "decision": decision}
 
 
-# ─── Demo users ─────────────────────────────────────────────────────────────────
+def extract_gps_metadata(file_bytes: bytes) -> dict | None:
+    """
+    Extract GPS EXIF metadata from an image file (JPG/JPEG/PNG/WebP).
+    Returns dict with lat, lon, altitude, timestamp if GPS data present, else None.
+    Phase 1: uses PIL/Pillow EXIF extraction.
+    Production: use exifread for more complete EXIF support.
+    """
+    try:
+        from PIL import Image
+        from PIL.ExifTags import TAGS, GPSTAGS
+        import io
+        img = Image.open(io.BytesIO(file_bytes))
+        exif = img._getexif()
+        if not exif:
+            return None
+        gps_ifd = {}
+        for tag_id, value in exif.items():
+            tag = TAGS.get(tag_id, tag_id)
+            if tag == "GPSInfo":
+                for key, val in value.items():
+                    gps_tag = GPSTAGS.get(key, key)
+                    gps_ifd[gps_tag] = val
+        if not gps_ifd:
+            return None
+        def _convert(gps_data, ref):
+            d, m, s = gps_data
+            result = d + m / 60 + s / 3600
+            if ref in ["S", "W"]:
+                result = -result
+            return result
+        lat = lon = None
+        if "GPSLatitude" in gps_ifd and "GPSLatitudeRef" in gps_ifd:
+            lat = _convert(gps_ifd["GPSLatitude"], gps_ifd["GPSLatitudeRef"])
+        if "GPSLongitude" in gps_ifd and "GPSLongitudeRef" in gps_ifd:
+            lon = _convert(gps_ifd["GPSLongitude"], gps_ifd["GPSLongitudeRef"])
+        altitude = gps_ifd.get("GPSAltitude")
+        ts = gps_ifd.get("GPSTimeStamp")
+        return {"lat": lat, "lon": lon, "altitude": altitude, "timestamp": str(ts)} if lat is not None else None
+    except Exception:
+        return None
+
+
+def store_document_metadata(claim_ref: str, file_name: str, file_size: int, gps_metadata: dict | None) -> dict:
+    """
+    Store document metadata including GPS coordinates extracted from photo EXIF.
+    Phase 1: logs to SQLite document_metadata table.
+    Retention governed by document.gps_metadata.retention_days in config.
+    """
+    conn = sqlite3.connect(_DB_PATH, timeout=10)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS document_metadata (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            claim_ref TEXT NOT NULL,
+            file_name TEXT NOT NULL,
+            file_size INTEGER,
+            gps_lat REAL,
+            gps_lon REAL,
+            gps_altitude REAL,
+            gps_timestamp TEXT,
+            uploaded_at TEXT NOT NULL
+        )
+    """)
+    lat = gps_metadata.get("lat") if gps_metadata else None
+    lon = gps_metadata.get("lon") if gps_metadata else None
+    alt = gps_metadata.get("altitude") if gps_metadata else None
+    ts  = gps_metadata.get("timestamp") if gps_metadata else None
+    conn.execute(
+        "INSERT INTO document_metadata (claim_ref, file_name, file_size, gps_lat, gps_lon, gps_altitude, gps_timestamp, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (claim_ref, file_name, file_size, lat, lon, alt, ts, datetime.now(timezone.utc).isoformat())
+    )
+    conn.commit()
+    conn.close()
+    return {"claim_ref": claim_ref, "file_name": file_name, "gps": gps_metadata}
+
 
 def get_user(email: str) -> dict | None:
     users = {
@@ -194,8 +223,8 @@ def get_user(email: str) -> dict | None:
 
 
 def get_all_users() -> list[dict]:
-    return list(get_user(email) for email in [
+    return [get_user(email) for email in [
         "client@insure.demo", "claims_officer@insure.demo", "head_of_claims@insure.demo",
         "assessor@insure.demo", "investigator@insure.demo", "garage@insure.demo",
         "spare_parts@insure.demo", "admin@insure.demo", "super@insure.demo",
-    ] if get_user(email) is not None)
+    ] if get_user(email) is not None]
