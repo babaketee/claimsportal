@@ -19,16 +19,12 @@ from typing import Any
 _DB_PATH = "claims_portal.db"
 
 
-# ---------------------------------------------------------------------------
-# Config Entry & Change Request
-# ---------------------------------------------------------------------------
-
 @dataclass
 class ConfigEntry:
     key: str
-    value: str          # JSON-serialized
+    value: str
     version: int
-    effective_from: str  # ISO date string YYYY-MM-DD
+    effective_from: str
     created_by: str
     created_at: str
     is_active: bool
@@ -37,11 +33,11 @@ class ConfigEntry:
 @dataclass
 class ChangeRequest:
     id: int | None
-    crid: str            # CR-YYYYMMDD-XXXX
+    crid: str
     key: str
-    proposed_value: str   # JSON
+    proposed_value: str
     reason: str
-    status: str          # PENDING | APPROVED | REJECTED
+    status: str
     proposed_by: str
     proposed_at: str
     reviewed_by: str | None
@@ -49,15 +45,7 @@ class ChangeRequest:
     review_notes: str | None
 
 
-# ---------------------------------------------------------------------------
-# ConfigDB
-# ---------------------------------------------------------------------------
-
 class ConfigDB:
-    """
-    Versioned key-value config store with Maker-Checker governance.
-    Phase 1: SQLite. Phase 2: dedicated config service.
-    """
     def __init__(self, db_path: str = _DB_PATH):
         self.db_path = db_path
         self._ensure_tables()
@@ -96,14 +84,7 @@ class ConfigDB:
         conn.commit()
         conn.close()
 
-    # ---- Read ---------------------------------------------------------------
-
     def get(self, key: str, as_of_date: str | None = None) -> Any | None:
-        """
-        Get active config value for key.
-        If as_of_date is provided, return the value that was active on that date.
-        Otherwise return the currently active value.
-        """
         conn = sqlite3.connect(self.db_path, timeout=10)
         if as_of_date:
             cur = conn.execute(
@@ -117,9 +98,7 @@ class ConfigDB:
             )
         row = cur.fetchone()
         conn.close()
-        if not row:
-            return None
-        return json.loads(row[0])
+        return json.loads(row[0]) if row else None
 
     def get_with_meta(self, key: str) -> ConfigEntry | None:
         conn = sqlite3.connect(self.db_path, timeout=10)
@@ -140,42 +119,21 @@ class ConfigDB:
         conn.close()
         return [r[0] for r in rows]
 
-    # ---- Maker-Checker Workflow --------------------------------------------
-
     def _make_crid(self) -> str:
         date_part = datetime.now(timezone.utc).strftime("%Y%m%d")
         random_part = str(uuid.uuid4())[:8].upper()
         return f"CR-{date_part}-{random_part}"
 
-    def propose_change(
-        self,
-        key: str,
-        proposed_value: Any,
-        reason: str,
-        proposed_by: str,
-        effective_from: str,  # YYYY-MM-DD — must be today or future
-    ) -> ChangeRequest:
-        """
-        Maker: Propose a config change.
-        Cannot be backdated — effective_from must be today or in the future.
-        """
+    def propose_change(self, key: str, proposed_value: Any, reason: str, proposed_by: str, effective_from: str) -> ChangeRequest:
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         if effective_from < today:
             raise ValueError("effective_from cannot be in the past — retrospective changes are not allowed")
-
         now = datetime.now(timezone.utc).isoformat()
         cr = ChangeRequest(
-            id=None,
-            crid=self._make_crid(),
-            key=key,
-            proposed_value=json.dumps(proposed_value),
-            reason=reason,
-            status="PENDING",
-            proposed_by=proposed_by,
-            proposed_at=now,
-            reviewed_by=None,
-            reviewed_at=None,
-            review_notes=None,
+            id=None, crid=self._make_crid(), key=key,
+            proposed_value=json.dumps(proposed_value), reason=reason,
+            status="PENDING", proposed_by=proposed_by, proposed_at=now,
+            reviewed_by=None, reviewed_at=None, review_notes=None,
         )
         conn = sqlite3.connect(self.db_path, timeout=10)
         cur = conn.execute(
@@ -188,51 +146,36 @@ class ConfigDB:
         return cr
 
     def approve_change(self, crid: str, reviewed_by: str, review_notes: str = "") -> ChangeRequest:
-        """
-        Checker: Approve a pending change request.
-        On approval: deactivate old active version, insert new version row.
-        """
         conn = sqlite3.connect(self.db_path, timeout=10)
         cur = conn.execute("SELECT * FROM config_change_requests WHERE crid=? AND status='PENDING'", (crid,))
         row = cur.fetchone()
         if not row:
             conn.close()
             raise ValueError(f"Change request {crid} not found or not pending")
-
         cr = ChangeRequest(
             id=row[0], crid=row[1], key=row[2], proposed_value=row[3],
             reason=row[4], status=row[5], proposed_by=row[6], proposed_at=row[7],
             reviewed_by=row[8], reviewed_at=row[9], review_notes=row[10]
         )
-
         now = datetime.now(timezone.utc).isoformat()
-
-        # Get current active version number
         cur2 = conn.execute("SELECT MAX(version) FROM config_entries WHERE key=? AND is_active=1", (cr.key,))
         current_version = cur2.fetchone()[0] or 0
         new_version = current_version + 1
-
-        # Deactivate current
         conn.execute("UPDATE config_entries SET is_active=0 WHERE key=? AND is_active=1", (cr.key,))
-
-        # Insert new version
         conn.execute(
             "INSERT INTO config_entries (key, version, value, effective_from, created_by, created_at, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)",
             (cr.key, new_version, cr.proposed_value, cr.key, reviewed_by, now)
         )
-
-        # Update CR status
         conn.execute(
             "UPDATE config_change_requests SET status='APPROVED', reviewed_by=?, reviewed_at=?, review_notes=? WHERE crid=?",
             (reviewed_by, now, review_notes, crid)
         )
         conn.commit()
         conn.close()
-
         cr.status = "APPROVED"
         cr.reviewed_by = reviewed_by
         cr.reviewed_at = now
-        cr.reviewed_at = review_notes
+        cr.review_notes = review_notes
         return cr
 
     def reject_change(self, crid: str, reviewed_by: str, review_notes: str) -> ChangeRequest:
@@ -284,29 +227,25 @@ class ConfigDB:
         ]
 
 
-# ---------------------------------------------------------------------------
-# Seed Default Config (Phase 1 — these drive the UI/form/business rules)
-# ---------------------------------------------------------------------------
-
 _DEFAULTS = {
-    "fast_track_limit":           {"value": 50000,  "effective_from": "2025-01-01", "created_by": "system"},
-    "garage_network_tolerance_pct": {"value": 15,    "effective_from": "2025-01-01", "created_by": "system"},
-    "inspection_sample_pct":       {"value": 10,    "effective_from": "2025-01-01", "created_by": "system"},
-    "max_approval_single_claim":   {"value": 500000, "effective_from": "2025-01-01", "created_by": "system"},
-    "approval_tier_1_limit":       {"value": 100000, "effective_from": "2025-01-01", "created_by": "system"},
-    "approval_tier_2_limit":       {"value": 300000, "effective_from": "2025-01-01", "created_by": "system"},
-    "tat_sla_draft_hours":         {"value": 24,     "effective_from": "2025-01-01", "created_by": "system"},
-    "tat_sla_submitted_hours":     {"value": 4,      "effective_from": "2025-01-01", "created_by": "system"},
-    "tat_sla_investigation_hours": {"value": 72,     "effective_from": "2025-01-01", "created_by": "system"},
-    "file_types_allowed":          {"value": ["jpg","jpeg","png","pdf","webp","heic"], "effective_from": "2025-01-01", "created_by": "system"},
-    "max_file_size_mb":            {"value": 25,     "effective_from": "2025-01-01", "created_by": "system"},
-    "sms_enabled":                  {"value": True,   "effective_from": "2025-01-01", "created_by": "system"},
-    "nhif_enabled":                 {"value": False,  "effective_from": "2025-01-01", "created_by": "system"},
+    "fast_track_limit":              {"value": 50000,  "effective_from": "2025-01-01", "created_by": "system"},
+    "garage_network_tolerance_pct":   {"value": 15,    "effective_from": "2025-01-01", "created_by": "system"},
+    "max_labor_rate_kes_per_hour":   {"value": 8000,  "effective_from": "2025-01-01", "created_by": "system"},
+    "inspection_sample_pct":          {"value": 10,    "effective_from": "2025-01-01", "created_by": "system"},
+    "max_approval_single_claim":      {"value": 500000, "effective_from": "2025-01-01", "created_by": "system"},
+    "approval_tier_1_limit":         {"value": 100000, "effective_from": "2025-01-01", "created_by": "system"},
+    "approval_tier_2_limit":         {"value": 300000, "effective_from": "2025-01-01", "created_by": "system"},
+    "tat_sla_draft_hours":           {"value": 24,     "effective_from": "2025-01-01", "created_by": "system"},
+    "tat_sla_submitted_hours":       {"value": 4,      "effective_from": "2025-01-01", "created_by": "system"},
+    "tat_sla_investigation_hours":   {"value": 72,     "effective_from": "2025-01-01", "created_by": "system"},
+    "file_types_allowed":             {"value": ["jpg","jpeg","png","pdf","webp","heic"], "effective_from": "2025-01-01", "created_by": "system"},
+    "max_file_size_mb":              {"value": 25,     "effective_from": "2025-01-01", "created_by": "system"},
+    "sms_enabled":                   {"value": True,   "effective_from": "2025-01-01", "created_by": "system"},
+    "nhif_enabled":                  {"value": False,  "effective_from": "2025-01-01", "created_by": "system"},
 }
 
 
 def seed_defaults(db_path: str = _DB_PATH) -> None:
-    """Seed default config entries if they don't exist. Idempotent."""
     cfg = ConfigDB(db_path)
     for key, meta in _DEFAULTS.items():
         if cfg.get(key) is None:
@@ -319,10 +258,8 @@ def seed_defaults(db_path: str = _DB_PATH) -> None:
             conn.close()
 
 
-# Singleton
 _config_db: ConfigDB | None = None
 _config_lock = threading.Lock()
-
 
 def get_config_db() -> ConfigDB:
     global _config_db
