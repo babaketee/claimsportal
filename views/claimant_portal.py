@@ -2,9 +2,9 @@
 ==================================================================================================
 Spaces: Own Damage (FNOL) | Third-Party Claim | Track My Claim | My Documents | My Profile
 
-Third-party claimants have no policy with Definite Assurance — they enter via the 
-insured vehicle's registration number (guest lookup). TP claims route through the 
-same workflow but are flagged as third-party and do not include garage/repair stages 
+Third-party claimants have no policy with Definite Assurance — they enter via the
+insured vehicle's registration number (guest lookup). TP claims route through the
+same workflow but are flagged as third-party and do not include garage/repair stages
 for bodily injury claims.
 
 Claims portal SoR: uses core_engine.ClaimManager and core_api.
@@ -140,8 +140,8 @@ def _fnol_form(user_email: str) -> None:
 def _tp_claim_form(user_email: str) -> None:
     st.subheader("Third-Party Claim — Guest Intake")
     st.markdown("""
-    **You are a third party** if you were involved in an accident caused by a vehicle 
-    insured with Definite Assurance. Enter the **at-fault vehicle's registration number** 
+    **You are a third party** if you were involved in an accident caused by a vehicle
+    insured with Definite Assurance. Enter the **at-fault vehicle's registration number**
     below to verify coverage and lodge your claim.
     """)
 
@@ -266,7 +266,8 @@ def _tp_claim_form(user_email: str) -> None:
             )
             st.success(
                 f"Third-party claim submitted! Reference: **{claim_ref}**"
-                f"\nYou will be contacted by our claims team."
+                f"
+You will be contacted by our claims team."
             )
             st.balloons()
         except Exception as e:
