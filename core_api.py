@@ -1,328 +1,201 @@
-import sqlite3, random
-from datetime import datetime
-from typing import Optional
+"""core_api.py — Definite Assurance Claims Portal API Client
+===========================================================
+Phase 1: SQLite-based demo data store + API stubs.
+In production: replace stubs with real HTTP calls to the core insurance system.
 
-_DB_PATH = "claims_history.db"
+Exchanges:
+  1. GET  /policies?identity=       — live policy pull (stub: SQLite demo)
+  2. POST /claims/notification       — register loss + initial reserve
+  3. PUSH /portal/claims/{ref}/triage — routing decision from core
+  4. PUSH /claims/{ref}/reports     — investigation + assessment packet
+  5. PUSH /portal/claims/{ref}/decision — approved payout or repudiation
+  6. PUSH /claims/{ref}/settlement   — final payout notification
+"""
 
-def _get_db():
-    return sqlite3.connect(_DB_PATH)
+from __future__ import annotations
 
-def _ensure_tables():
-    conn = _get_db()
-    cur = conn.cursor()
-    cur.execute("CREATE TABLE IF NOT EXISTS claims_history (id INTEGER PRIMARY KEY AUTOINCREMENT, claim_ref TEXT UNIQUE NOT NULL, client TEXT NOT NULL, claim_type TEXT NOT NULL, insurer TEXT, claim_cause TEXT, status TEXT NOT NULL DEFAULT 'Reported', location TEXT, vehicle_reg TEXT, date_filed TEXT, last_updated TEXT)")
-    cur.execute("CREATE TABLE IF NOT EXISTS status_history (id INTEGER PRIMARY KEY AUTOINCREMENT, claim_ref TEXT NOT NULL, action TEXT NOT NULL, user_email TEXT, timestamp TEXT NOT NULL, notes TEXT)")
-    cur.execute("CREATE TABLE IF NOT EXISTS reserves (id INTEGER PRIMARY KEY AUTOINCREMENT, claim_ref TEXT NOT NULL, reserve_amount REAL DEFAULT 0, amount_paid REAL DEFAULT 0, reserve_type TEXT, reason TEXT, status TEXT DEFAULT 'Active', set_by TEXT, set_date TEXT)")
-    cur.execute("CREATE TABLE IF NOT EXISTS diary_entries (id INTEGER PRIMARY KEY AUTOINCREMENT, claim_ref TEXT NOT NULL, entry_text TEXT, entry_date TEXT, entered_by TEXT, due_date TEXT, priority TEXT DEFAULT 'Medium', status TEXT DEFAULT 'Open')")
-    cur.execute("CREATE TABLE IF NOT EXISTS communications (id INTEGER PRIMARY KEY AUTOINCREMENT, claim_ref TEXT NOT NULL, direction TEXT, channel TEXT, recipient TEXT, message TEXT, sent_at TEXT, status TEXT DEFAULT 'Sent')")
-    cur.execute("CREATE TABLE IF NOT EXISTS expert_assignments (id INTEGER PRIMARY KEY AUTOINCREMENT, claim_ref TEXT NOT NULL, expert_name TEXT, expert_type TEXT, assigned_date TEXT, status TEXT DEFAULT 'Assigned', notes TEXT)")
-    cur.execute("CREATE TABLE IF NOT EXISTS claim_documents (id INTEGER PRIMARY KEY AUTOINCREMENT, claim_ref TEXT NOT NULL, doc_type TEXT, file_name TEXT, uploaded_at TEXT, uploaded_by TEXT)")
-    cur.execute("CREATE TABLE IF NOT EXISTS settlements (id INTEGER PRIMARY KEY AUTOINCREMENT, claim_ref TEXT NOT NULL, settlement_amount REAL DEFAULT 0, wht_amount REAL DEFAULT 0, net_amount REAL DEFAULT 0, settlement_date TEXT, settlement_type TEXT, status TEXT DEFAULT 'Recommended', approved_by TEXT, approved_date TEXT, bank_ref TEXT)")
+import sqlite3
+import uuid
+import random
+from datetime import datetime, timezone
+from typing import Any
+
+_DB_PATH = "claims_portal.db"
+
+# ─── Demo data store (Phase 1 — replace with real API calls in production) ────
+
+DEMO_POLICIES = [
+    {"policy_ref": "POL-MOT-2026-001", "product": "Motor Comprehensive", "id_number": "12345678","vehicle_reg": "KBZ 000A",  "sum_insured": 2_500_000, "premium_status": "paid", "cover_start": "2026-01-01", "cover_end": "2026-12-31"},
+    {"policy_ref": "POL-MOT-2026-002", "product": "Motor Third Party",   "id_number": "23456789","vehicle_reg": "KAZ 111B",  "sum_insured": None,             "premium_status": "paid", "cover_start": "2026-01-01", "cover_end": "2026-12-31"},
+    {"policy_ref": "POL-MOT-2026-003", "product": "Motor Comprehensive", "id_number": "34567890","vehicle_reg": "KBC 222C",  "sum_insured": 1_800_000, "premium_status": "paid", "cover_start": "2026-01-01", "cover_end": "2026-12-31"},
+    {"policy_ref": "POL-MOT-2026-004", "product": "Motor Comprehensive", "id_number": "45678901","vehicle_reg": "KBJ 333D",  "sum_insured": 3_000_000, "premium_status": "pending", "cover_start": "2026-01-01", "cover_end": "2026-12-31"},
+    {"policy_ref": "POL-MOT-2026-005", "product": "Motor Third Party",   "id_number": "56789012","vehicle_reg": "KCD 444E",  "sum_insured": None,             "premium_status": "paid", "cover_start": "2026-01-01", "cover_end": "2026-12-31"},
+]
+
+DEMO_VEHICLES = {p["vehicle_reg"]: p for p in DEMO_POLICIES if p.get("vehicle_reg")}
+
+# ─── Policy verification ─────────────────────────────────────────────────────────
+
+def verify_policy(identity: str) -> dict | None:
+    """
+    Lookup policy by ID number, passport number, or policy reference.
+    Phase 1: searches DEMO_POLICIES.
+    Production: calls core system Exchange 1 — GET /policies?identity=ID
+    """
+    for p in DEMO_POLICIES:
+        if (p["id_number"] == identity or
+            p["policy_ref"].lower() == identity.lower() or
+            p.get("vehicle_reg","").upper().replace(" ","") == identity.upper().replace(" ","")):
+            return p
+    return None
+
+
+def verify_vehicle_reg(reg: str) -> dict | None:
+    """
+    Third-party vehicle lookup by registration number.
+    Returns policy info if the vehicle is insured with Definite Assurance.
+    Used for third-party claimant guest intake (R1).
+    Phase 1: searches DEMO_VEHICLES.
+    Production: calls core system — GET /vehicles?reg=KBZ000A
+    """
+    key = reg.upper().replace(" ", "")
+    return DEMO_VEHICLES.get(key)
+
+
+def get_policy(policy_ref: str) -> dict | None:
+    """Get full policy record by reference."""
+    for p in DEMO_POLICIES:
+        if p["policy_ref"] == policy_ref:
+            return p
+    return None
+
+
+# ─── Claim notification ─────────────────────────────────────────────────────────
+
+def notify_claim(claim_ref: str, policy_ref: str, payload: dict) -> dict:
+    """
+    Register a claim with the core system (Exchange 2).
+    Phase 1: logs to SQLite demo_claims table.
+    Production: POST /claims/notification with idempotency key.
+    """
+    conn = sqlite3.connect(_DB_PATH, timeout=10)
+    cur = conn.execute(
+        "SELECT 1 FROM demo_claims WHERE claim_ref=?", (claim_ref,)
+    )
+    if not cur.fetchone():
+        conn.execute(
+            "INSERT INTO demo_claims (claim_ref, policy_ref, status, created_at) VALUES (?, ?, ?, ?)",
+            (claim_ref, policy_ref, "notified", datetime.now(timezone.utc).isoformat())
+        )
+        conn.commit()
+    conn.close()
+    return {"success": True, "claim_ref": claim_ref, "policy_ref": policy_ref}
+
+
+# ─── Reserve movements (R3) ──────────────────────────────────────────────────────
+
+def reserve_movement(claim_ref: str, movement_type: str, amount: float, currency: str = "KES") -> dict:
+    """
+    Record a reserve movement on a claim.
+    movement_type: "initial" | "revision" | "release"
+    Phase 1: logs to SQLite reserve_movements table.
+    Production: calls core system — PATCH /claims/{ref}/reserve
+    """
+    conn = sqlite3.connect(_DB_PATH, timeout=10)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS reserve_movements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            claim_ref TEXT NOT NULL,
+            movement_type TEXT NOT NULL,
+            amount REAL NOT NULL,
+            currency TEXT DEFAULT 'KES',
+            created_at TEXT NOT NULL,
+            UNIQUE(claim_ref, movement_type, created_at)
+        )
+    """)
+    conn.execute(
+        "INSERT INTO reserve_movements (claim_ref, movement_type, amount, currency, created_at) VALUES (?, ?, ?, ?, ?)",
+        (claim_ref, movement_type, amount, currency, datetime.now(timezone.utc).isoformat())
+    )
     conn.commit()
-    cur.close()
     conn.close()
+    return {"success": True, "claim_ref": claim_ref, "movement_type": movement_type, "amount": amount}
 
-def get_claims(filters: Optional[dict] = None, user_email: str = None):
-    _ensure_tables()
-    conn = _get_db()
-    cur = conn.cursor()
-    query = "SELECT claim_ref, client, claim_type, insurer, claim_cause, status, location, vehicle_reg, date_filed, last_updated FROM claims_history WHERE 1=1"
-    params = []
-    email = user_email if user_email else (filters.get("user_email") if filters else None)
-    if email:
-        query += " AND client = ?"
-        params.append(email)
-    if filters:
-        if filters.get("claim_ref"):
-            query += " AND claim_ref LIKE ?"
-            params.append(f"%{filters['claim_ref']}%")
-        if filters.get("status"):
-            query += " AND status = ?"
-            params.append(filters["status"])
-    query += " ORDER BY date_filed DESC LIMIT 200"
-    cur.execute(query, params)
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-    return rows
 
-def get_claim(claim_ref):
-    _ensure_tables()
-    conn = _get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT claim_ref, client, claim_type, insurer, claim_cause, status, location, vehicle_reg, date_filed, last_updated FROM claims_history WHERE claim_ref = ?", (claim_ref,))
-    row = cur.fetchone()
-    cur.close()
-    conn.close()
-    return row
+# ─── Inbound webhook stubs (Exchanges 3 & 5 — core → portal) ──────────────────
 
-def create_claim(claim_ref, client, claim_type, insurer, claim_cause, status, location, vehicle_reg):
-    _ensure_tables()
-    conn = _get_db()
-    now = datetime.now().isoformat()
-    cur = conn.cursor()
-    cur.execute("INSERT INTO claims_history (claim_ref, client, claim_type, insurer, claim_cause, status, location, vehicle_reg, date_filed, last_updated) VALUES (?,?,?,?,?,?,?,?,?,?)", (claim_ref, client, claim_type, insurer, claim_cause, status, location, vehicle_reg, now, now))
+def receive_triage_decision(claim_ref: str, triage_decision: str, assigned_to: str) -> dict:
+    """
+    Exchange 3: Core → Portal. Push triage/routing decision.
+    decision: "fast_track" | "standard" | "escalated"
+    """
+    conn = sqlite3.connect(_DB_PATH, timeout=10)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS triage_decisions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            claim_ref TEXT UNIQUE NOT NULL,
+            triage_decision TEXT NOT NULL,
+            assigned_to TEXT,
+            received_at TEXT NOT NULL
+        )
+    """)
+    conn.execute(
+        "INSERT OR REPLACE INTO triage_decisions (claim_ref, triage_decision, assigned_to, received_at) VALUES (?, ?, ?, ?)",
+        (claim_ref, triage_decision, assigned_to, datetime.now(timezone.utc).isoformat())
+    )
     conn.commit()
-    cur.close()
     conn.close()
-    return claim_ref
+    return {"success": True, "claim_ref": claim_ref}
 
-def update_claim_status(claim_ref, new_status, user_email=None):
-    _ensure_tables()
-    conn = _get_db()
-    now = datetime.now().isoformat()
-    cur = conn.cursor()
-    cur.execute("UPDATE claims_history SET status = ?, last_updated = ? WHERE claim_ref = ?", (new_status, now, claim_ref))
-    cur.execute("INSERT INTO status_history (claim_ref, action, user_email, timestamp, notes) VALUES (?,?,?,?,?)", (claim_ref, f"Status changed to {new_status}", user_email or "system", now, ""))
+
+def receive_approval_decision(claim_ref: str, decision: str, payout_amount: float | None, reason_code: str | None, approver_id: str) -> dict:
+    """
+    Exchange 5: Core → Portal. Push approval or repudiation decision.
+    decision: "approved" | "repudiated"
+    Must be idempotent — calling twice with same decision returns success both times.
+    """
+    conn = sqlite3.connect(_DB_PATH, timeout=10)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS approval_decisions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            claim_ref TEXT UNIQUE NOT NULL,
+            decision TEXT NOT NULL,
+            payout_amount REAL,
+            reason_code TEXT,
+            approver_id TEXT NOT NULL,
+            received_at TEXT NOT NULL
+        )
+    """)
+    # Idempotent — use INSERT OR REPLACE
+    conn.execute(
+        "INSERT OR REPLACE INTO approval_decisions (claim_ref, decision, payout_amount, reason_code, approver_id, received_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (claim_ref, decision, payout_amount, reason_code, approver_id, datetime.now(timezone.utc).isoformat())
+    )
     conn.commit()
-    cur.close()
     conn.close()
+    return {"success": True, "claim_ref": claim_ref, "decision": decision}
 
-def set_reserve(claim_ref, amount, reserve_type, reason, set_by="system"):
-    _ensure_tables()
-    conn = _get_db()
-    now = datetime.now().isoformat()
-    cur = conn.cursor()
-    cur.execute("INSERT INTO reserves (claim_ref, reserve_amount, amount_paid, reserve_type, reason, status, set_by, set_date) VALUES (?,?,0,?,?,'Active',?,?)", (claim_ref, amount, reserve_type, reason, set_by, now))
-    conn.commit()
-    cur.close()
-    conn.close()
 
-def get_reserves(claim_ref):
-    _ensure_tables()
-    conn = _get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT id, reserve_amount, amount_paid, reserve_type, reason, status, set_by, set_date FROM reserves WHERE claim_ref = ? ORDER BY set_date DESC", (claim_ref,))
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-    return rows
+# ─── Demo users ─────────────────────────────────────────────────────────────────
 
-def add_diary_entry(claim_ref, entry_text, entered_by, due_date=None, priority="Medium"):
-    _ensure_tables()
-    conn = _get_db()
-    now = datetime.now().isoformat()
-    cur = conn.cursor()
-    cur.execute("INSERT INTO diary_entries (claim_ref, entry_text, entry_date, entered_by, due_date, priority, status) VALUES (?,?,?,?,?,'Open')", (claim_ref, entry_text, now, entered_by, due_date, priority))
-    conn.commit()
-    cur.close()
-    conn.close()
+def get_user(email: str) -> dict | None:
+    users = {
+        "client@insure.demo":               {"email": "client@insure.demo",               "name": "Jane Policyholder",  "role": "client"},
+        "claims_officer@insure.demo":       {"email": "claims_officer@insure.demo",       "name": "Caleb Officer",      "role": "claims_officer"},
+        "head_of_claims@insure.demo":       {"email": "head_of_claims@insure.demo",       "name": "Diana HOC",          "role": "head_of_claims"},
+        "assessor@insure.demo":             {"email": "assessor@insure.demo",             "name": "Felix Assessor",     "role": "assessor"},
+        "investigator@insure.demo":         {"email": "investigator@insure.demo",         "name": "Ivan Investigator",  "role": "investigator"},
+        "garage@insure.demo":               {"email": "garage@insure.demo",               "name": "George Garage",      "role": "garage"},
+        "spare_parts@insure.demo":          {"email": "spare_parts@insure.demo",          "name": "Sara Spares",        "role": "spare_parts"},
+        "admin@insure.demo":                {"email": "admin@insure.demo",                "name": "Ada Admin",          "role": "admin"},
+        "super@insure.demo":                 {"email": "super@insure.demo",                 "name": "Sam Super",           "role": "super_admin"},
+    }
+    return users.get(email)
 
-def get_diary_entries(claim_ref):
-    _ensure_tables()
-    conn = _get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT id, entry_text, entry_date, entered_by, due_date, priority, status FROM diary_entries WHERE claim_ref = ? ORDER BY entry_date DESC", (claim_ref,))
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-    return rows
 
-def get_overdue_entries():
-    _ensure_tables()
-    conn = _get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT id, claim_ref, entry_text, due_date, priority, status FROM diary_entries WHERE status='Open' ORDER BY due_date ASC")
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-    return rows
-
-def log_communication(claim_ref, direction, channel, recipient, message):
-    _ensure_tables()
-    conn = _get_db()
-    now = datetime.now().isoformat()
-    cur = conn.cursor()
-    cur.execute("INSERT INTO communications (claim_ref, direction, channel, recipient, message, sent_at, status) VALUES (?,?,?,?,?,?,'Sent')", (claim_ref, direction, channel, recipient, message, now))
-    conn.commit()
-    cur.close()
-    conn.close()
-
-def assign_expert(claim_ref, expert_name, expert_type):
-    _ensure_tables()
-    conn = _get_db()
-    now = datetime.now().isoformat()
-    cur = conn.cursor()
-    cur.execute("INSERT INTO expert_assignments (claim_ref, expert_name, expert_type, assigned_date, status) VALUES (?,?,?,?,'Assigned')", (claim_ref, expert_name, expert_type, now))
-    conn.commit()
-    cur.close()
-    conn.close()
-
-def get_assignments(claim_ref=None, expert_type=None):
-    _ensure_tables()
-    conn = _get_db()
-    cur = conn.cursor()
-    query = "SELECT id, claim_ref, expert_name, expert_type, assigned_date, status, notes FROM expert_assignments WHERE 1=1"
-    params = []
-    if claim_ref:
-        query += " AND claim_ref = ?"
-        params.append(claim_ref)
-    if expert_type:
-        query += " AND expert_type = ?"
-        params.append(expert_type)
-    query += " ORDER BY assigned_date DESC"
-    cur.execute(query, params)
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-    return rows
-
-def update_assignment_status(assignment_id, new_status):
-    _ensure_tables()
-    conn = _get_db()
-    cur = conn.cursor()
-    cur.execute("UPDATE expert_assignments SET status = ? WHERE id = ?", (new_status, assignment_id))
-    conn.commit()
-    cur.close()
-    conn.close()
-
-def recommend_settlement(claim_ref, amount, settlement_type, approved_by=None):
-    _ensure_tables()
-    conn = _get_db()
-    now = datetime.now().isoformat()
-    wht = round(amount * 0.05, 2)
-    net = round(amount - wht, 2)
-    cur = conn.cursor()
-    cur.execute("INSERT INTO settlements (claim_ref, settlement_amount, wht_amount, net_amount, settlement_date, settlement_type, status, approved_by, approved_date) VALUES (?,?,?,?,?,?,'Recommended',?,?)", (claim_ref, amount, wht, net, now, settlement_type, approved_by, now))
-    conn.commit()
-    cur.close()
-    conn.close()
-
-def mark_settlement_paid(settlement_id, bank_ref=None):
-    _ensure_tables()
-    conn = _get_db()
-    now = datetime.now().isoformat()
-    cur = conn.cursor()
-    if bank_ref:
-        cur.execute("UPDATE settlements SET status='Paid', settlement_date=?, bank_ref=? WHERE id=?", (now, bank_ref, settlement_id))
-    else:
-        cur.execute("UPDATE settlements SET status='Paid', settlement_date=? WHERE id=?", (now, settlement_id))
-    conn.commit()
-    cur.close()
-    conn.close()
-
-def get_settlements(claim_ref):
-    _ensure_tables()
-    conn = _get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT id, settlement_amount, wht_amount, net_amount, settlement_date, settlement_type, status, approved_by, approved_date FROM settlements WHERE claim_ref = ? ORDER BY settlement_date DESC", (claim_ref,))
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-    return rows
-
-def get_settlements_by_status(statuses):
-    import pandas as pd
-    _ensure_tables()
-    conn = _get_db()
-    try:
-        placeholders = ",".join(["?"] * len(statuses))
-        df = pd.read_sql_query(f"SELECT s.id, s.claim_ref, s.settlement_amount, s.wht_amount, s.net_amount, s.settlement_date, s.settlement_type, s.status, s.approved_by, s.approved_date, c.client AS payee_name FROM settlements s JOIN claims_history c ON s.claim_ref = c.claim_ref WHERE s.status IN ({placeholders}) ORDER BY s.settlement_date DESC", conn, params=statuses)
-        conn.close()
-        return df
-    except Exception:
-        conn.close()
-        return pd.DataFrame()
-
-def register_document(claim_ref, doc_type, file_name, uploaded_by="system"):
-    _ensure_tables()
-    conn = _get_db()
-    now = datetime.now().isoformat()
-    cur = conn.cursor()
-    cur.execute("INSERT INTO claim_documents (claim_ref, doc_type, file_name, uploaded_at, uploaded_by) VALUES (?,?,?,?,?)", (claim_ref, doc_type, file_name, now, uploaded_by))
-    conn.commit()
-    cur.close()
-    conn.close()
-
-def get_documents(claim_ref):
-    _ensure_tables()
-    conn = _get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT id, doc_type, file_name, uploaded_at, uploaded_by FROM claim_documents WHERE claim_ref = ? ORDER BY uploaded_at DESC", (claim_ref,))
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-    return rows
-
-def get_timeline(claim_ref):
-    _ensure_tables()
-    conn = _get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT id, action, user_email, timestamp, notes FROM status_history WHERE claim_ref = ? ORDER BY timestamp ASC", (claim_ref,))
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-    return rows
-
-def seed_demo_data():
-    _ensure_tables()
-    conn = _get_db()
-    cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) FROM claims_history")
-    if (cur.fetchone() or [0])[0] > 0:
-        cur.close()
-        conn.close()
-        return "Already seeded"
-    cur.close()
-    motor = [
-        ("MTR-2026-0001","client@insure.demo","Motor Comprehensive","Kenya Direct","Bodily Injury","Reported - Under Investigation","Nairobi","KBA 123A"),
-        ("MTR-2026-0002","client@insure.demo","Motor Comprehensive","Kenya Direct","Third Party Only","Reserve Set - Pending Assessment","Mombasa","KBB 456B"),
-        ("MTR-2026-0003","officer@insure.demo","Motor Third Party","Jubilee Insurance","Windscreen","Closed - Settled","Kisumu","KBC 789C"),
-        ("MTR-2026-0004","assessor@insure.demo","Motor Comprehensive","Britam","Theft","Reported - Under Investigation","Nairobi","KBD 101D"),
-        ("MTR-2026-0005","garage@insure.demo","Motor Comprehensive","Kenya Direct","Engine Failure","Reserve Set - Awaiting Repair","Nakuru","KBE 202E"),
-        ("MTR-2026-0006","investigator@insure.demo","Motor Third Party","Jubilee Insurance","Accident Damage","Reported - Under Investigation","Eldoret","KBF 303F"),
-        ("MTR-2026-0007","client@insure.demo","Motor Comprehensive","CIC Insurance","Total Loss","Closed - Settled","Nairobi","KBG 404G"),
-        ("MTR-2026-0008","officer@insure.demo","Motor Third Party","First Assurance","Third Party Liability","Reserve Set - Pending Assessment","Mombasa","KBH 505H"),
-        ("MTR-2026-0009","assessor@insure.demo","Motor Comprehensive","Kenya Direct","Fire Damage","Reported - Under Investigation","Nairobi","KBI 606I"),
-        ("MTR-2026-0010","garage@insure.demo","Motor Comprehensive","Britam","Partial Loss","Reserve Set - Awaiting Repair","Kisumu","KBJ 707J"),
-        ("MTR-2026-0011","client@insure.demo","Motor Third Party","Jubilee Insurance","Bodily Injury","Reported - Under Investigation","Nairobi","KBK 808K"),
-        ("MTR-2026-0012","officer@insure.demo","Motor Comprehensive","CIC Insurance","Theft","Closed - Repudiated","Mombasa","KBL 909L"),
-        ("MTR-2026-0013","assessor@insure.demo","Motor Comprehensive","First Assurance","Accident Damage","Reserve Set - Pending Assessment","Nairobi","KBM 110M"),
-        ("MTR-2026-0014","garage@insure.demo","Motor Third Party","Kenya Direct","Windscreen","Closed - Settled","Nakuru","KBN 211N"),
-        ("MTR-2026-0015","investigator@insure.demo","Motor Comprehensive","Britam","Theft","Reported - Under Investigation","Eldoret","KBO 312O"),
-        ("MTR-2026-0016","client@insure.demo","Motor Comprehensive","Jubilee Insurance","Engine Failure","Reserve Set - Awaiting Repair","Kisumu","KBP 413P"),
-        ("MTR-2026-0017","officer@insure.demo","Motor Third Party","CIC Insurance","Third Party Liability","Reserve Set - Pending Assessment","Nairobi","KBQ 514Q"),
-        ("MTR-2026-0018","assessor@insure.demo","Motor Comprehensive","First Assurance","Fire Damage","Reported - Under Investigation","Mombasa","KBR 615R"),
-        ("MTR-2026-0019","garage@insure.demo","Motor Comprehensive","Kenya Direct","Partial Loss","Reserve Set - Awaiting Repair","Nairobi","KBS 716S"),
-        ("MTR-2026-0020","investigator@insure.demo","Motor Third Party","Britam","Bodily Injury","Reported - Under Investigation","Nairobi","KBT 817T"),
-        ("MTR-2026-0021","client@insure.demo","Motor Comprehensive","Jubilee Insurance","Total Loss","Closed - Settled","Kisumu","KBU 918U"),
-        ("MTR-2026-0022","officer@insure.demo","Motor Comprehensive","CIC Insurance","Theft","Reported - Under Investigation","Nairobi","KBV 019V"),
-        ("MTR-2026-0023","assessor@insure.demo","Motor Third Party","First Assurance","Accident Damage","Reserve Set - Pending Assessment","Mombasa","KBW 120W"),
-        ("MTR-2026-0024","garage@insure.demo","Motor Comprehensive","Kenya Direct","Windscreen","Closed - Settled","Nairobi","KBX 221X"),
-        ("MTR-2026-0025","investigator@insure.demo","Motor Comprehensive","Britam","Fire Damage","Reported - Under Investigation","Eldoret","KBY 322Y"),
-    ]
-    business = [
-        ("BSN-2026-0001","client@insure.demo","Business Insurance","Jubilee Insurance","Fire Damage","Reported - Under Investigation","Nairobi","OFF-001"),
-        ("BSN-2026-0002","officer@insure.demo","Business Insurance","Britam","Burglary","Reserve Set - Pending Assessment","Mombasa","OFF-002"),
-        ("BSN-2026-0003","assessor@insure.demo","Business Insurance","CIC Insurance","Theft","Closed - Settled","Kisumu","OFF-003"),
-        ("BSN-2026-0004","garage@insure.demo","Business Insurance","First Assurance","Water Damage","Reported - Under Investigation","Nairobi","OFF-004"),
-        ("BSN-2026-0005","investigator@insure.demo","Business Insurance","Kenya Direct","Burglary","Reserve Set - Awaiting Repair","Nakuru","OFF-005"),
-        ("BSN-2026-0006","client@insure.demo","Public Liability","Jubilee Insurance","Third Party Claim","Reported - Under Investigation","Nairobi","OFF-006"),
-        ("BSN-2026-0007","officer@insure.demo","Business Insurance","Britam","Fire Damage","Closed - Settled","Mombasa","OFF-007"),
-        ("BSN-2026-0008","assessor@insure.demo","Business Insurance","CIC Insurance","Equipment Breakdown","Reserve Set - Pending Assessment","Eldoret","OFF-008"),
-        ("BSN-2026-0009","garage@insure.demo","Public Liability","First Assurance","Public Injury","Reported - Under Investigation","Kisumu","OFF-009"),
-        ("BSN-2026-0010","investigator@insure.demo","Business Insurance","Kenya Direct","Burglary","Closed - Repudiated","Nairobi","OFF-010"),
-        ("BSN-2026-0011","client@insure.demo","Business Insurance","Jubilee Insurance","Theft","Reserve Set - Awaiting Repair","Mombasa","OFF-011"),
-        ("BSN-2026-0012","officer@insure.demo","Business Insurance","Britam","Fire Damage","Reported - Under Investigation","Nairobi","OFF-012"),
-        ("BSN-2026-0013","assessor@insure.demo","Public Liability","CIC Insurance","Third Party Claim","Reserve Set - Pending Assessment","Kisumu","OFF-013"),
-        ("BSN-2026-0014","garage@insure.demo","Business Insurance","First Assurance","Water Damage","Closed - Settled","Nairobi","OFF-014"),
-        ("BSN-2026-0015","investigator@insure.demo","Business Insurance","Kenya Direct","Burglary","Reported - Under Investigation","Nakuru","OFF-015"),
-        ("BSN-2026-0016","client@insure.demo","Business Insurance","Jubilee Insurance","Equipment Breakdown","Reserve Set - Awaiting Repair","Eldoret","OFF-016"),
-        ("BSN-2026-0017","officer@insure.demo","Public Liability","Britam","Public Injury","Reported - Under Investigation","Nairobi","OFF-017"),
-        ("BSN-2026-0018","assessor@insure.demo","Business Insurance","CIC Insurance","Fire Damage","Closed - Settled","Mombasa","OFF-018"),
-        ("BSN-2026-0019","garage@insure.demo","Business Insurance","First Assurance","Theft","Reserve Set - Pending Assessment","Kisumu","OFF-019"),
-        ("BSN-2026-0020","investigator@insure.demo","Business Insurance","Kenya Direct","Burglary","Reported - Under Investigation","Nairobi","OFF-020"),
-    ]
-    now = "2026-07-30 12:00:00"
-    conn = _get_db()
-    cur = conn.cursor()
-    for c in motor + business:
-        cur.execute("INSERT INTO claims_history (claim_ref, client, claim_type, insurer, claim_cause, status, location, vehicle_reg, date_filed, last_updated) VALUES (?,?,?,?,?,?,?,?,?,?)", (*c, now, now))
-    for c in motor + business:
-        cur.execute("INSERT INTO reserves (claim_ref, reserve_amount, amount_paid, reserve_type, reason, status, set_by, set_date) VALUES (?,?,0,'Initial Reserve','Claim assessment','Active','system',?)", (c[0], random.randint(50000, 500000), now))
-    for c in motor + business:
-        cur.execute("INSERT INTO status_history (claim_ref, action, user_email, timestamp, notes) VALUES (?,'Claim Reported','system',?,'Initial claim registration')", (c[0], now))
-    conn.commit()
-    cur.close()
-    conn.close()
-    return "Seeded 45 claims"
+def get_all_users() -> list[dict]:
+    return list(get_user(email) for email in [
+        "client@insure.demo", "claims_officer@insure.demo", "head_of_claims@insure.demo",
+        "assessor@insure.demo", "investigator@insure.demo", "garage@insure.demo",
+        "spare_parts@insure.demo", "admin@insure.demo", "super@insure.demo",
+    ] if get_user(email) is not None)
