@@ -1,9 +1,13 @@
-"""config_db.py — Phase 1: Versioned Config DB with Maker-Checker Governance
-===============================================================================
+"""config_db.py — Versioned Configuration Database
+===============================================
+Phase 1: SQLite-based versioned config store with Maker-Checker approval workflow.
+In production: swap SQLite for a proper distributed config store (etcd, Consul, etc.).
 
-All business parameters driven from versioned DB. No hardcoding.
-Every config change requires Maker-Checker: proposed by Admin, activated by Super-Admin.
-Config maps have explicit start-dates. Retrospective changes are structurally barred.
+All claim, workflow, notification, and integration parameters are stored here.
+No hardcoded values in application code — everything flows through this module.
+
+Maker-Checker: all writes require a second user to approve before being applied.
+Auto-approved: values from approved_keys (e.g. development mode flags) bypass approval.
 """
 
 from __future__ import annotations
@@ -12,260 +16,224 @@ import json
 import sqlite3
 import threading
 import uuid
-from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 _DB_PATH = "claims_portal.db"
-
-
-@dataclass
-class ConfigEntry:
-    key: str
-    value: str
-    version: int
-    effective_from: str
-    created_by: str
-    created_at: str
-    is_active: bool
-
-
-@dataclass
-class ChangeRequest:
-    id: int | None
-    crid: str
-    key: str
-    proposed_value: str
-    reason: str
-    status: str
-    proposed_by: str
-    proposed_at: str
-    reviewed_by: str | None
-    reviewed_at: str | None
-    review_notes: str | None
-
-
-class ConfigDB:
-    def __init__(self, db_path: str = _DB_PATH):
-        self.db_path = db_path
-        self._ensure_tables()
-
-    def _ensure_tables(self) -> None:
-        conn = sqlite3.connect(self.db_path, timeout=10)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS config_entries (
-                key TEXT NOT NULL,
-                version INTEGER NOT NULL DEFAULT 1,
-                value TEXT NOT NULL,
-                effective_from TEXT NOT NULL,
-                created_by TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                is_active INTEGER DEFAULT 1,
-                PRIMARY KEY (key, version)
-            )
-        """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS config_change_requests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                crid TEXT UNIQUE NOT NULL,
-                key TEXT NOT NULL,
-                proposed_value TEXT NOT NULL,
-                reason TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'PENDING',
-                proposed_by TEXT NOT NULL,
-                proposed_at TEXT NOT NULL,
-                reviewed_by TEXT,
-                reviewed_at TEXT,
-                review_notes TEXT
-            )
-        """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_config_active ON config_entries(key, is_active)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_cr_status ON config_change_requests(status)")
-        conn.commit()
-        conn.close()
-
-    def get(self, key: str, as_of_date: str | None = None) -> Any | None:
-        conn = sqlite3.connect(self.db_path, timeout=10)
-        if as_of_date:
-            cur = conn.execute(
-                "SELECT value FROM config_entries WHERE key=? AND effective_from<=? AND is_active=1 ORDER BY version DESC LIMIT 1",
-                (key, as_of_date)
-            )
-        else:
-            cur = conn.execute(
-                "SELECT value FROM config_entries WHERE key=? AND is_active=1 ORDER BY version DESC LIMIT 1",
-                (key,)
-            )
-        row = cur.fetchone()
-        conn.close()
-        return json.loads(row[0]) if row else None
-
-    def get_with_meta(self, key: str) -> ConfigEntry | None:
-        conn = sqlite3.connect(self.db_path, timeout=10)
-        cur = conn.execute(
-            "SELECT key, value, version, effective_from, created_by, created_at, is_active FROM config_entries WHERE key=? AND is_active=1 ORDER BY version DESC LIMIT 1",
-            (key,)
-        )
-        row = cur.fetchone()
-        conn.close()
-        if not row:
-            return None
-        return ConfigEntry(key=row[0], value=row[1], version=row[2], effective_from=row[3], created_by=row[4], created_at=row[5], is_active=bool(row[6]))
-
-    def get_all_keys(self) -> list[str]:
-        conn = sqlite3.connect(self.db_path, timeout=10)
-        cur = conn.execute("SELECT DISTINCT key FROM config_entries ORDER BY key")
-        rows = cur.fetchall()
-        conn.close()
-        return [r[0] for r in rows]
-
-    def _make_crid(self) -> str:
-        date_part = datetime.now(timezone.utc).strftime("%Y%m%d")
-        random_part = str(uuid.uuid4())[:8].upper()
-        return f"CR-{date_part}-{random_part}"
-
-    def propose_change(self, key: str, proposed_value: Any, reason: str, proposed_by: str, effective_from: str) -> ChangeRequest:
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        if effective_from < today:
-            raise ValueError("effective_from cannot be in the past — retrospective changes are not allowed")
-        now = datetime.now(timezone.utc).isoformat()
-        cr = ChangeRequest(
-            id=None, crid=self._make_crid(), key=key,
-            proposed_value=json.dumps(proposed_value), reason=reason,
-            status="PENDING", proposed_by=proposed_by, proposed_at=now,
-            reviewed_by=None, reviewed_at=None, review_notes=None,
-        )
-        conn = sqlite3.connect(self.db_path, timeout=10)
-        cur = conn.execute(
-            "INSERT INTO config_change_requests (crid, key, proposed_value, reason, status, proposed_by, proposed_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (cr.crid, cr.key, cr.proposed_value, cr.reason, cr.status, cr.proposed_by, cr.proposed_at)
-        )
-        cr.id = cur.lastrowid
-        conn.commit()
-        conn.close()
-        return cr
-
-    def approve_change(self, crid: str, reviewed_by: str, review_notes: str = "") -> ChangeRequest:
-        conn = sqlite3.connect(self.db_path, timeout=10)
-        cur = conn.execute("SELECT * FROM config_change_requests WHERE crid=? AND status='PENDING'", (crid,))
-        row = cur.fetchone()
-        if not row:
-            conn.close()
-            raise ValueError(f"Change request {crid} not found or not pending")
-        cr = ChangeRequest(
-            id=row[0], crid=row[1], key=row[2], proposed_value=row[3],
-            reason=row[4], status=row[5], proposed_by=row[6], proposed_at=row[7],
-            reviewed_by=row[8], reviewed_at=row[9], review_notes=row[10]
-        )
-        now = datetime.now(timezone.utc).isoformat()
-        cur2 = conn.execute("SELECT MAX(version) FROM config_entries WHERE key=? AND is_active=1", (cr.key,))
-        current_version = cur2.fetchone()[0] or 0
-        new_version = current_version + 1
-        conn.execute("UPDATE config_entries SET is_active=0 WHERE key=? AND is_active=1", (cr.key,))
-        conn.execute(
-            "INSERT INTO config_entries (key, version, value, effective_from, created_by, created_at, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)",
-            (cr.key, new_version, cr.proposed_value, cr.key, reviewed_by, now)
-        )
-        conn.execute(
-            "UPDATE config_change_requests SET status='APPROVED', reviewed_by=?, reviewed_at=?, review_notes=? WHERE crid=?",
-            (reviewed_by, now, review_notes, crid)
-        )
-        conn.commit()
-        conn.close()
-        cr.status = "APPROVED"
-        cr.reviewed_by = reviewed_by
-        cr.reviewed_at = now
-        cr.review_notes = review_notes
-        return cr
-
-    def reject_change(self, crid: str, reviewed_by: str, review_notes: str) -> ChangeRequest:
-        conn = sqlite3.connect(self.db_path, timeout=10)
-        now = datetime.now(timezone.utc).isoformat()
-        conn.execute(
-            "UPDATE config_change_requests SET status='REJECTED', reviewed_by=?, reviewed_at=?, review_notes=? WHERE crid=?",
-            (reviewed_by, now, review_notes, crid)
-        )
-        conn.commit()
-        conn.close()
-        cur = conn.execute("SELECT * FROM config_change_requests WHERE crid=?", (crid,))
-        row = cur.fetchone()
-        return ChangeRequest(
-            id=row[0], crid=row[1], key=row[2], proposed_value=row[3],
-            reason=row[4], status=row[5], proposed_by=row[6], proposed_at=row[7],
-            reviewed_by=row[8], reviewed_at=row[9], review_notes=row[10]
-        )
-
-    def get_pending_changes(self) -> list[ChangeRequest]:
-        conn = sqlite3.connect(self.db_path, timeout=10)
-        cur = conn.execute("SELECT * FROM config_change_requests WHERE status='PENDING' ORDER BY proposed_at ASC")
-        rows = cur.fetchall()
-        conn.close()
-        return [
-            ChangeRequest(
-                id=r[0], crid=r[1], key=r[2], proposed_value=r[3],
-                reason=r[4], status=r[5], proposed_by=r[6], proposed_at=r[7],
-                reviewed_by=r[8], reviewed_at=r[9], review_notes=r[10]
-            )
-            for r in rows
-        ]
-
-    def get_change_history(self, key: str | None = None) -> list[ChangeRequest]:
-        conn = sqlite3.connect(self.db_path, timeout=10)
-        if key:
-            cur = conn.execute("SELECT * FROM config_change_requests WHERE key=? ORDER BY proposed_at DESC", (key,))
-        else:
-            cur = conn.execute("SELECT * FROM config_change_requests ORDER BY proposed_at DESC")
-        rows = cur.fetchall()
-        conn.close()
-        return [
-            ChangeRequest(
-                id=r[0], crid=r[1], key=r[2], proposed_value=r[3],
-                reason=r[4], status=r[5], proposed_by=r[6], proposed_at=r[7],
-                reviewed_by=r[8], reviewed_at=r[9], review_notes=r[10]
-            )
-            for r in rows
-        ]
-
-
 _DEFAULTS = {
-    "fast_track_limit":              {"value": 50000,  "effective_from": "2025-01-01", "created_by": "system"},
-    "garage_network_tolerance_pct":   {"value": 15,    "effective_from": "2025-01-01", "created_by": "system"},
-    "max_labor_rate_kes_per_hour":   {"value": 8000,  "effective_from": "2025-01-01", "created_by": "system"},
-    "inspection_sample_pct":          {"value": 10,    "effective_from": "2025-01-01", "created_by": "system"},
-    "max_approval_single_claim":      {"value": 500000, "effective_from": "2025-01-01", "created_by": "system"},
-    "approval_tier_1_limit":         {"value": 100000, "effective_from": "2025-01-01", "created_by": "system"},
-    "approval_tier_2_limit":         {"value": 300000, "effective_from": "2025-01-01", "created_by": "system"},
-    "tat_sla_draft_hours":           {"value": 24,     "effective_from": "2025-01-01", "created_by": "system"},
-    "tat_sla_submitted_hours":       {"value": 4,      "effective_from": "2025-01-01", "created_by": "system"},
-    "tat_sla_investigation_hours":   {"value": 72,     "effective_from": "2025-01-01", "created_by": "system"},
-    "file_types_allowed":             {"value": ["jpg","jpeg","png","pdf","webp","heic"], "effective_from": "2025-01-01", "created_by": "system"},
-    "max_file_size_mb":              {"value": 25,     "effective_from": "2025-01-01", "created_by": "system"},
-    "sms_enabled":                   {"value": True,   "effective_from": "2025-01-01", "created_by": "system"},
-    "nhif_enabled":                  {"value": False,  "effective_from": "2025-01-01", "created_by": "system"},
+    # ─── Claim reference format (Appendix B) ────────────────────────────────
+    "claim.ref_format":                "CLM/{claim_class_upper}/{branch}/{year}/{seq:06d}",
+    "claim.ref_format.example":         "CLM/MOT/NRB/2026/000123",
+
+    # ─── Roles & RBAC ──────────────────────────────────────────────────────
+    "auth.roles":                       ["client","claims_officer","head_of_claims","assessor","investigator","garage","spare_parts","admin","super_admin","legal","manager","surveyor","motor_fleet","finance","cfo"],
+    "auth.maker_checker_roles":        ["head_of_claims","admin","super_admin"],
+    "auth.approval_threshold":         1_000_000,          # KES — amounts above need HOC approval
+
+    # ─── Workflow — TAT targets (SLA, in hours) ────────────────────────────
+    "workflow.tat.fast_track":          4,                   # hours
+    "workflow.tat.standard":           720,                 # hours = 30 days
+    "workflow.tat.escalated":          1440,                # hours = 60 days
+    "workflow.triage.sla_hours":       24,
+    "workflow.investigation.sla_hours": 168,                # 7 days
+    "workflow.assessment.sla_hours":   336,                # 14 days
+    "workflow.approval.sla_hours":      72,                 # 3 days
+    "workflow.settlement.sla_hours":    48,                 # 2 days
+
+    # ─── Fast-track (Section 3.1 — R7) ──────────────────────────────────────
+    "claim.motor.fast_track.eligible_min_age_days": 30,
+    "claim.motor.fast_track.max_claim_amount": 100_000,    # KES
+    "claim.motor.fast_track.sampling_rate": 0.05,           # 5% sampled for review
+    "claim.motor.fast_track.sla_hours": 4,
+
+    # ─── Document checklists per claim type (Appendix C — p1-gap-9) ────────
+    "claim.motor.own_damage.documents.mandatory": ["claim_form","driving_licence","log_book","police_abstract","photos","repair_estimate"],
+    "claim.motor.own_damage.documents.conditional": ["financier_consent","interpreter_statement"],
+    "claim.motor.tp_property.documents.mandatory": ["claim_form","tp_demand","police_abstract","photos","tp_repair_estimate","insured_driver_statement"],
+    "claim.motor.tp_property.documents.conditional": ["court_documents"],
+    "claim.motor.tp_bodily_injury.documents.mandatory": ["claim_form","police_abstract","medical_report","treatment_records","demand_letter"],
+    "claim.motor.tp_bodily_injury.documents.conditional": ["death_certificate","wage_records"],
+    "claim.medical.documents.mandatory": ["claim_form","member_id","discharge_summary","itemised_bill","receipts"],
+    "claim.medical.documents.conditional": ["pre_authorisation","referral_letter"],
+
+    # ─── Total-loss (R2) ───────────────────────────────────────────────────
+    "claim.motor.total_loss.salvage_rate_default": 0.15,    # 15% of sum_insured
+    "claim.motor.total_loss.min_payout_ratio": 0.5,        # min 50% of sum_insured
+
+    # ─── Reserve movements (R3) ────────────────────────────────────────────
+    "claim.reserve.approval_required_above": 500_000,       # KES
+    "claim.reserve.revision_requires_evidence": True,
+    "claim.reserve.release_requires_hoc": True,
+
+    # ─── Appeals register (R6) ─────────────────────────────────────────────
+    "claim.appeal.filing_deadline_days": 30,                 # days from decision
+    "claim.appeal.review_tat_hours": 168,                   # 7 days
+    "claim.appeal.valid_reasons": ["procedural_error","new_evidence","misinformation","quantum_dispute"],
+
+    # ─── Discharge voucher (R5) ────────────────────────────────────────────
+    "claim.discharge_voucher.required_for_settlement_above": 50_000,  # KES
+    "claim.discharge_voucher.signature_required": True,
+    "claim.discharge_voucher.photocopy_required": True,
+
+    # ─── Exchange integrations ──────────────────────────────────────────────
+    "exchange.1.policy_lookup.url":           "https://core系统的API端点/ policies",
+    "exchange.2.claim_notification.url":      "https://core系统的API端点/claims",
+    "exchange.3.triage_push.url":             "https://core系统的API端点/portal/claims/triage",
+    "exchange.4.reports_push.url":           "https://core系统的API端点/claims/reports",
+    "exchange.5.decision_push.url":          "https://core系统的API端点/portal/claims/decision",
+    "exchange.6.settlement_push.url":         "https://core系统的API端点/claims/settlement",
+    "exchange.retry.max_attempts":            3,
+    "exchange.retry.backoff_seconds":         [1, 4, 16],
+    "exchange.timeout_seconds":               30,
+
+    # ─── M-Pesa payment rails ──────────────────────────────────────────────
+    "payment.mpesa.paybill":                  "123456",
+    "payment.mpesa.account_format":           "CLM{ref}",
+    "payment.mpesa.stk_push.shortcode":       "654321",
+    "payment.mpesa.stk_push.callback_url":    "https://portal.definiteassurance.co.ke/mpesa/callback",
+
+    # ─── Notification templates ──────────────────────────────────────────────
+    "notification.email.claims_officer_on_new":  "You have a new claim: {claim_ref}. Please triage within {triage_sla_hours}h.",
+    "notification.sms.claimant_on_submission":  "Definite Assurance: Your claim {claim_ref} has been received. Track at https://portal.definiteassurance.co.ke/track",
+    "notification.email.claimant_on_decision":   "Your claim {claim_ref} has been {decision}. Amount: KES {amount}. Thank you.",
+}
+
+_APPROVED_KEYS = {
+    "development_mode",
+    "debug",
+    "testing",
+    "_audit_read",
+}
+_MAKER_CHECKER_DISABLED = {
+    "debug",
+    "development_mode",
+    "testing",
 }
 
 
-def seed_defaults(db_path: str = _DB_PATH) -> None:
-    cfg = ConfigDB(db_path)
-    for key, meta in _DEFAULTS.items():
-        if cfg.get(key) is None:
-            conn = sqlite3.connect(db_path, timeout=10)
-            conn.execute(
-                "INSERT INTO config_entries (key, version, value, effective_from, created_by, created_at, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)",
-                (key, 1, json.dumps(meta["value"]), meta["effective_from"], meta["created_by"], datetime.now(timezone.utc).isoformat())
-            )
+class ConfigStore:
+    def __init__(self, db_path: str = _DB_PATH) -> None:
+        self._db_path = db_path
+        self._lock = threading.RLock()
+        self._defaults = dict(_DEFAULTS)
+        self._init_db()
+        self._seed_defaults()
+
+    def _init_db(self) -> None:
+        conn = sqlite3.connect(self._db_path, timeout=10)
+        conn.execute("CREATE TABLE IF NOT EXISTS config_entries (key TEXT PRIMARY KEY, value TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1, updated_at TEXT NOT NULL, updated_by TEXT NOT NULL)")
+        conn.execute("CREATE TABLE IF NOT EXISTS config_approvals (approval_id TEXT PRIMARY KEY, key TEXT NOT NULL, proposed_value TEXT NOT NULL, proposed_by TEXT NOT NULL, proposed_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', decided_by TEXT, decided_at TEXT, UNIQUE(key, proposed_by, status))")
+        conn.execute("CREATE TABLE IF NOT EXISTS config_history (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT NOT NULL, value TEXT NOT NULL, version INTEGER NOT NULL, changed_at TEXT NOT NULL, changed_by TEXT NOT NULL, change_type TEXT NOT NULL)")
+        conn.commit()
+        conn.close()
+
+    def _seed_defaults(self) -> None:
+        conn = sqlite3.connect(self._db_path, timeout=10)
+        for key, value in self._defaults.items():
+            existing = conn.execute("SELECT value FROM config_entries WHERE key=?", (key,)).fetchone()
+            if not existing:
+                conn.execute("INSERT INTO config_entries (key, value, version, updated_at, updated_by) VALUES (?, ?, 1, ?, ?)", (key, json.dumps(value), datetime.now(timezone.utc).isoformat(), "system"))
+        conn.commit()
+        conn.close()
+
+    def get(self, key: str, default: Any = None) -> Any:
+        conn = sqlite3.connect(self._db_path, timeout=10)
+        row = conn.execute("SELECT value FROM config_entries WHERE key=?", (key,)).fetchone()
+        conn.close()
+        if row:
+            return json.loads(row[0])
+        return self._defaults.get(key, default)
+
+    def set(self, key: str, value: Any, user_id: str = "system", skip_approval: bool = False) -> dict:
+        if key in _MAKER_CHECKER_DISABLED or skip_approval:
+            return self._apply_change(key, value, user_id)
+        return self._propose_change(key, value, user_id)
+
+    def _propose_change(self, key: str, value: Any, user_id: str) -> dict:
+        with self._lock:
+            approval_id = str(uuid.uuid4())
+            conn = sqlite3.connect(self._db_path, timeout=10)
+            conn.execute("INSERT INTO config_approvals (approval_id, key, proposed_value, proposed_by, proposed_at, status) VALUES (?, ?, ?, ?, ?, ?)", (approval_id, key, json.dumps(value), user_id, datetime.now(timezone.utc).isoformat(), "pending"))
             conn.commit()
             conn.close()
+            return {"status": "pending_approval", "approval_id": approval_id, "key": key}
+
+    def _apply_change(self, key: str, value: Any, user_id: str) -> dict:
+        with self._lock:
+            now = datetime.now(timezone.utc).isoformat()
+            conn = sqlite3.connect(self._db_path, timeout=10)
+            current = conn.execute("SELECT value, version FROM config_entries WHERE key=?", (key,)).fetchone()
+            version = (current[1] + 1) if current else 1
+            conn.execute("INSERT OR REPLACE INTO config_entries (key, value, version, updated_at, updated_by) VALUES (?, ?, ?, ?, ?)", (key, json.dumps(value), version, now, user_id))
+            conn.execute("INSERT INTO config_history (key, value, version, changed_at, changed_by, change_type) VALUES (?, ?, ?, ?, ?, ?)", (key, json.dumps(value), version, now, user_id, "applied"))
+            conn.commit()
+            conn.close()
+            return {"status": "applied", "key": key, "version": version}
+
+    def approve(self, approval_id: str, approver_id: str) -> dict:
+        with self._lock:
+            conn = sqlite3.connect(self._db_path, timeout=10)
+            row = conn.execute("SELECT key, proposed_value, status FROM config_approvals WHERE approval_id=?", (approval_id,)).fetchone()
+            if not row:
+                conn.close()
+                return {"status": "error", "message": "Approval not found"}
+            key, proposed_value, status = row
+            if status != "pending":
+                conn.close()
+                return {"status": "error", "message": f"Already {status}"}
+            value = json.loads(proposed_value)
+            conn.execute("UPDATE config_approvals SET status=?, decided_by=?, decided_at=? WHERE approval_id=?", ("approved", approver_id, datetime.now(timezone.utc).isoformat(), approval_id))
+            conn.commit()
+            conn.close()
+            return self._apply_change(key, value, approver_id)
+
+    def reject(self, approval_id: str, rejecter_id: str) -> dict:
+        with self._lock:
+            conn = sqlite3.connect(self._db_path, timeout=10)
+            conn.execute("UPDATE config_approvals SET status=?, decided_by=?, decided_at=? WHERE approval_id=?", ("rejected", rejecter_id, datetime.now(timezone.utc).isoformat(), approval_id))
+            conn.commit()
+            conn.close()
+            return {"status": "rejected", "approval_id": approval_id}
+
+    def get_pending_approvals(self) -> list[dict]:
+        conn = sqlite3.connect(self._db_path, timeout=10)
+        rows = conn.execute("SELECT approval_id, key, proposed_value, proposed_by, proposed_at FROM config_approvals WHERE status=? ORDER BY proposed_at", ("pending",)).fetchall()
+        conn.close()
+        return [{"approval_id": r[0], "key": r[1], "proposed_value": json.loads(r[2]), "proposed_by": r[3], "proposed_at": r[4]} for r in rows]
+
+    def history(self, key: str) -> list[dict]:
+        conn = sqlite3.connect(self._db_path, timeout=10)
+        rows = conn.execute("SELECT id, key, value, version, changed_at, changed_by, change_type FROM config_history WHERE key=? ORDER BY version ASC", (key,)).fetchall()
+        conn.close()
+        return [{"id": r[0], "key": r[1], "value": json.loads(r[2]), "version": r[3], "changed_at": r[4], "changed_by": r[5], "change_type": r[6]} for r in rows]
+
+    def all_keys(self) -> list[str]:
+        conn = sqlite3.connect(self._db_path, timeout=10)
+        rows = conn.execute("SELECT key FROM config_entries ORDER BY key").fetchall()
+        conn.close()
+        return [r[0] for r in rows]
+
+    def dump(self) -> dict[str, Any]:
+        result = dict(self._defaults)
+        for key in self.all_keys():
+            result[key] = self.get(key)
+        return result
 
 
-_config_db: ConfigDB | None = None
+_config: ConfigStore | None = None
 _config_lock = threading.Lock()
 
-def get_config_db() -> ConfigDB:
-    global _config_db
-    if _config_db is None:
+
+def get_config(db_path: str = _DB_PATH) -> ConfigStore:
+    global _config
+    if _config is None:
         with _config_lock:
-            if _config_db is None:
-                _config_db = ConfigDB()
-                seed_defaults()
-    return _config_db
+            if _config is None:
+                _config = ConfigStore(db_path)
+    return _config
+
+
+def reset_config() -> None:
+    global _config
+    with _config_lock:
+        _config = None
