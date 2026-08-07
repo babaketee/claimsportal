@@ -186,8 +186,8 @@ def _render_login() -> None:
     demo_rows = ""
     for email, (name, role, pwd) in sorted(DEMO_USERS.items()):
         label = ROLE_LABELS.get(role, role)
-        demo_rows += f`<tr><td>${name}</td><td><code>${email}</code></td><td><code>${pwd}</code></td><td>${label}</td></tr>`
-    st.html(f`
+        demo_rows += f"<tr><td>{name}</td><td><code>{email}</code></td><td><code>{pwd}</code></td><td>{label}</td></tr>"
+    st.html(f"""
     <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
         <tr style="background:#1a5276; color:white;">
             <th style="padding:6px;text-align:left;">Name</th>
@@ -195,9 +195,9 @@ def _render_login() -> None:
             <th style="padding:6px;text-align:left;">Password</th>
             <th style="padding:6px;text-align:left;">Role</th>
         </tr>
-        $${demo_rows}
+        {demo_rows}
     </table>
-    `)
+    """)
 
     st.markdown("---")
 
