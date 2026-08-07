@@ -4,15 +4,15 @@ Definite Assurance Insurance | Claims Portal
 
 Auth: session_state-based demo auth (swap for real auth in Phase 2).
 Role -> view mapping:
-  client           -> views/00_claimant_portal
-  claims_officer   -> views/10_intake_panel
-  head_of_claims   -> views/10_intake_panel  (superset)
-  assessor         -> views/20_provider_panel
-  investigator     -> views/20_provider_panel
-  garage           -> views/20_provider_panel
-  spare_parts      -> views/20_provider_panel
-  admin            -> views/30_admin_console
-  super_admin      -> views/30_admin_console  (superset)
+  client           -> views/claimant_portal
+  claims_officer   -> views/intake_panel
+  head_of_claims   -> views/intake_panel  (superset)
+  assessor         -> views/provider_panel
+  investigator     -> views/provider_panel
+  garage           -> views/provider_panel
+  spare_parts      -> views/provider_panel
+  admin            -> views/admin_console
+  super_admin      -> views/admin_console  (superset)
 """
 
 from __future__ import annotations
@@ -27,102 +27,94 @@ import core_api
 import core_engine
 import config_db
 
-# Import views
+# Import legacy views
 import views.client_portal     as client_portal
-import views.claims_officer    as claims_officer
-import views.head_of_claims   as hoc
-import views.surveyor          as surveyor
-import views.investigator     as investigator
+import views.claims_officer  as claims_officer
+import views.head_of_claims  as hoc
+import views.surveyor        as surveyor
+import views.investigator    as investigator
 import views.garage          as garage_mod
-import views.legal            as legal
-import views.manager          as manager
-import views.motor_fleet      as motor_fleet
-import views.admin_dashboard  as admin_dashboard
+import views.legal           as legal
+import views.manager         as manager
+import views.motor_fleet     as motor_fleet
+import views.admin_dashboard as admin_dashboard
 import views.analytics_charts as analytics_charts
-import views.brand             as brand
-import views.super_admin      as super_admin
+import views.brand           as brand
+import views.super_admin     as super_admin
 
-# Phase 1 new views
+# Phase 1 new views — valid Python identifiers (no leading digits)
 try:
-    import views.00_claimant_portal  as claimant_portal
+    import views.claimant_portal as claimant_portal
 except ImportError:
     claimant_portal = None
 
 try:
-    import views.10_intake_panel     as intake_panel
+    import views.intake_panel as intake_panel
 except ImportError:
     intake_panel = None
 
 try:
-    import views.20_provider_panel   as provider_panel
+    import views.provider_panel as provider_panel
 except ImportError:
     provider_panel = None
 
 try:
-    import views.30_admin_console   as admin_console
+    import views.admin_console as admin_console
 except ImportError:
     admin_console = None
 
 
 # ─── Role definitions ────────────────────────────────────────────────────────
 
-CLAIMANT_ROLES      = {"client"}
-INTAKE_ROLES         = {"claims_officer", "head_of_claims"}
-PROVIDER_ROLES       = {"assessor", "investigator", "garage", "spare_parts"}
-ADMIN_ROLES          = {"admin", "super_admin"}
-
-ALL_ROLES = (CLAIMANT_ROLES | INTAKE_ROLES | PROVIDER_ROLES | ADMIN_ROLES)
+CLAIMANT_ROLES = {"client"}
+INTAKE_ROLES    = {"claims_officer", "head_of_claims"}
+PROVIDER_ROLES  = {"assessor", "investigator", "garage", "spare_parts"}
+ADMIN_ROLES     = {"admin", "super_admin"}
 
 ROLE_LABELS = {
     "client":          "Client / Policyholder",
-    "claims_officer": "Claims Officer",
-    "head_of_claims": "Head of Claims",
-    "assessor":       "Assessor",
-    "investigator":   "Investigator",
-    "garage":         "Garage",
-    "spare_parts":    "Spare Parts",
-    "admin":          "Administrator",
-    "super_admin":    "Super Administrator",
-    "legal":          "Legal",
-    "manager":        "Manager",
-    "surveyor":       "Surveyor",
-    "motor_fleet":    "Motor Fleet Manager",
+    "claims_officer":  "Claims Officer",
+    "head_of_claims":   "Head of Claims",
+    "assessor":         "Assessor",
+    "investigator":      "Investigator",
+    "garage":           "Garage",
+    "spare_parts":      "Spare Parts",
+    "admin":            "Administrator",
+    "super_admin":      "Super Administrator",
+    "legal":            "Legal",
+    "manager":          "Manager",
+    "surveyor":         "Surveyor",
+    "motor_fleet":      "Motor Fleet Manager",
 }
 
-
-# ─── Auth helpers ────────────────────────────────────────────────────────────
+# ─── Demo users ───────────────────────────────────────────────────────────────
 
 DEMO_USERS = {
-    # email                    : (display_name,        role,           password)
-    "client@insure.demo"       : ("Jane Policyholder",  "client",        "Client#99"),
-    "claims_officer@insure.demo": ("Caleb Officer",     "claims_officer", "Officer#99"),
-    "head_of_claims@insure.demo": ("Diana HOC",         "head_of_claims", "HOC#99"),
-    "assessor@insure.demo"     : ("Felix Assessor",     "assessor",       "Survey#99"),
-    "investigator@insure.demo": ("Ivan Investigator",  "investigator",   "Sleuth#99"),
-    "garage@insure.demo"       : ("George Garage",      "garage",         "Wrench#99"),
-    "spare_parts@insure.demo"  : ("Sara Spares",        "spare_parts",    "Catalog#99"),
-    "admin@insure.demo"        : ("Ada Admin",          "admin",          "SysCtrl#99"),
-    "super@insure.demo"         : ("Sam Super",          "super_admin",     "Super#99"),
-    "legal@insure.demo"        : ("Lara Legal",         "legal",          "Counsel#99"),
-    "manager@insure.demo"      : ("Mary Manager",       "manager",        "Manager#99"),
-    "surveyor@insure.demo"     : ("Steve Surveyor",      "surveyor",       "Survey#99"),
-    "motor_fleet@insure.demo" : ("Molly Fleet",         "motor_fleet",    "Fleet#99"),
+    "client@insure.demo":               ("Jane Policyholder",  "client",           "Client#99"),
+    "claims_officer@insure.demo":       ("Caleb Officer",      "claims_officer",  "Officer#99"),
+    "head_of_claims@insure.demo":       ("Diana HOC",          "head_of_claims",  "HOC#99"),
+    "assessor@insure.demo":             ("Felix Assessor",     "assessor",        "Survey#99"),
+    "investigator@insure.demo":         ("Ivan Investigator",  "investigator",    "Sleuth#99"),
+    "garage@insure.demo":               ("George Garage",      "garage",          "Wrench#99"),
+    "spare_parts@insure.demo":          ("Sara Spares",        "spare_parts",     "Catalog#99"),
+    "admin@insure.demo":                ("Ada Admin",          "admin",           "SysCtrl#99"),
+    "super@insure.demo":                 ("Sam Super",           "super_admin",      "Super#99"),
+    "legal@insure.demo":                ("Lara Legal",         "legal",           "Counsel#99"),
+    "manager@insure.demo":             ("Mary Manager",        "manager",         "Manager#99"),
+    "surveyor@insure.demo":             ("Steve Surveyor",      "surveyor",        "Survey#99"),
+    "motor_fleet@insure.demo":          ("Molly Fleet",         "motor_fleet",     "Fleet#99"),
 }
-
 
 def _get_user(email: str, password: str) -> tuple | None:
     entry = DEMO_USERS.get(email)
     if entry and entry[2] == password:
-        return entry[0], entry[1]   # (name, role)
+        return entry[0], entry[1]
     return None
 
-
-# ─── Page guard ───────────────────────────────────────────────────────────────
+# ─── Page dispatch ───────────────────────────────────────────────────────────
 
 def _render_page(user_email: str, user_name: str, user_role: str) -> None:
-    """Dispatch to the correct view by role."""
-
-    # Phase 1 views (new routing)
+    # Phase 1 new views (digit-free names)
     if claimant_portal and user_role in CLAIMANT_ROLES:
         claimant_portal.render(user_email)
         return
@@ -141,16 +133,16 @@ def _render_page(user_email: str, user_name: str, user_role: str) -> None:
 
     # Legacy views (prototype-era)
     legacy_map = {
-        "claims_officer":  claims_officer.render,
-        "head_of_claims":   hoc.render,
-        "surveyor":         surveyor.render,
-        "investigator":     investigator.render,
-        "garage":           garage_mod.render,
-        "legal":            legal.render,
-        "manager":          manager.render,
-        "motor_fleet":      motor_fleet.render,
-        "admin":            admin_dashboard.render,
-        "super_admin":      super_admin.render,
+        "claims_officer": claims_officer.render,
+        "head_of_claims": hoc.render,
+        "surveyor":       surveyor.render,
+        "investigator":   investigator.render,
+        "garage":         garage_mod.render,
+        "legal":          legal.render,
+        "manager":        manager.render,
+        "motor_fleet":    motor_fleet.render,
+        "admin":          admin_dashboard.render,
+        "super_admin":    super_admin.render,
     }
 
     fn = legacy_map.get(user_role)
@@ -163,7 +155,6 @@ def _render_page(user_email: str, user_name: str, user_role: str) -> None:
 
     st.error(f"No view configured for role: {user_role}")
 
-
 # ─── Login page ───────────────────────────────────────────────────────────────
 
 def _render_login() -> None:
@@ -173,15 +164,11 @@ def _render_login() -> None:
         layout="centered",
     )
 
-    # Header
-    st.html("""
-    <div style="text-align:center; margin-bottom:2rem;">
+    st.html("""<div style="text-align:center; margin-bottom:2rem;">
         <h1 style="color:#1a5276;">🛡️ Definite Assurance</h1>
         <p style="color:gray;">Insurance Company Limited — Kenya</p>
-    </div>
-    """)
+    </div>""")
 
-    # Demo accounts
     st.info("**Demo Accounts** (email / password)")
     demo_rows = ""
     for email, (name, role, pwd) in sorted(DEMO_USERS.items()):
@@ -196,12 +183,10 @@ def _render_login() -> None:
             <th style="padding:6px;text-align:left;">Role</th>
         </tr>
         {demo_rows}
-    </table>
-    """)
+    </table>""")
 
     st.markdown("---")
 
-    # Login form
     col1, col2 = st.columns([1, 1])
     with col1:
         st.subheader("Sign In")
@@ -220,7 +205,6 @@ def _render_login() -> None:
         else:
             st.error("Invalid email or password.")
 
-
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -230,7 +214,6 @@ def main() -> None:
         layout="wide",
     )
 
-    # Initialise session state
     for k, v in {
         "authenticated": False,
         "user_email":    "",
@@ -247,7 +230,6 @@ def main() -> None:
     user_name  = st.session_state["user_name"]
     user_role  = st.session_state["user_role"]
 
-    # Logout in sidebar
     with st.sidebar:
         st.write(f"**{user_name}**")
         st.caption(ROLE_LABELS.get(user_role, user_role))
@@ -257,7 +239,6 @@ def main() -> None:
                 del st.session_state[k]
             st.rerun()
 
-    # Route to view
     _render_page(user_email, user_name, user_role)
 
 
