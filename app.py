@@ -92,15 +92,15 @@ def login_page() -> None:
             st.error("Invalid credentials. Try a demo account.")
     with st.expander("📋 Demo Accounts"):
         for email_addr, info in auth.DEMO_USERS.items():
-            st.caption(f"**{info['name']}** ({info['role']}): `{email_addr}` / `{info['password']}`")
+            st.caption(f"**{info["name"]}** ({info["role"]}): `{email_addr}` / `{info["password"]}`")
 
 def sidebar_nav() -> str:
     st.sidebar.title("🏢 Definite Assurance")
     st.sidebar.caption("Claims Portal v2.0")
     st.sidebar.divider()
     user = auth.current_user()
-    st.sidebar.success(f"✅ {user['name']}")
-    st.sidebar.caption(f"Role: {user['role'].replace('_', ' ').title()}")
+    st.sidebar.success(f"✅ {user["name"]}")
+    st.sidebar.caption(f"Role: {user["role"].replace("_", " ").title()}")
     st.sidebar.divider()
     allowed = ROLE_ACCESS.get(user["role"], [])
     selected = st.sidebar.radio("Navigation", allowed, index=None, placeholder="Choose a section...")
@@ -122,18 +122,18 @@ def render_page(page_path: str) -> None:
             if hasattr(mod, "render"):
                 mod.render(user_email=user["email"], user_role=user["role"])
             else:
-                st.info("Page loaded but has no render() function.")
+                st.info(f"Page loaded but has no render() function.")
         else:
             st.error(f"Could not load page: {page_path}")
 
 def main() -> None:
+    st.set_page_config(page_title="Definite Assurance — Claims Portal", page_icon="🏢", layout="wide")
     init()
     if not st.session_state.get("authenticated"):
         login_page()
         return
     selected = sidebar_nav()
     if not selected:
-        st.set_page_config(layout="wide")
         st.title("🏢 Definite Assurance — Claims Portal")
         st.success("Welcome! Select a section from the sidebar.")
         col1, col2, col3 = st.columns(3)
