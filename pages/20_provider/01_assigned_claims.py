@@ -1,4 +1,4 @@
-"""Assigned Claims — pages/20_provider/01_assigned_claims.py"""
+"""Assigned Claims â pages/20_provider/01_assigned_claims.py"""
 """
 Role: assessor, investigator, garage, spare_parts
 View claims assigned to the logged-in provider.
@@ -11,7 +11,7 @@ import streamlit as st
 import pandas as pd
 
 def render(user_email: str, user_role: str = "assessor") -> None:
-    st.title("🔧 Assigned Claims")
+    st.title("ð§ Assigned Claims")
     engine = get_engine()
     statuses = ["Investigation","Assessment","Approval","Under Repair","Reinspection"]
     all_rows = []
@@ -28,3 +28,5 @@ def render(user_email: str, user_role: str = "assessor") -> None:
              "Amount": f"KES {c.get('estimated_amount',0):,.0f}",
              "Class": c.get("claim_class","").replace("_"," ").title()} for c in all_rows]
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+if __name__ == "__main__":
+    render("test@insure.demo", "assessor")
