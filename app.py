@@ -1,6 +1,7 @@
 """
-app.py — Definite Assurance Claims Portal
-Stackwire / Definite Assurance — Phase 2 (Railway Migration)
+# v2026-08-08-redeploy - force fresh container
+app.py â Definite Assurance Claims Portal
+Stackwire / Definite Assurance â Phase 2 (Railway Migration)
 """
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -15,38 +16,38 @@ import lib.auth as auth
 import lib.helpers as helpers
 
 PAGE_STRUCTURE = {
-    "🏠 Home": [],
-    "📋 Claimant Portal": [
+    "ð  Home": [],
+    "ð Claimant Portal": [
         "pages/00_claimant/01_dashboard.py",
         "pages/00_claimant/02_new_claim.py",
         "pages/00_claimant/03_track_claim.py",
         "pages/00_claimant/04_upload_documents.py",
         "pages/00_claimant/05_claim_detail.py",
     ],
-    "📥 Intake Panel": [
+    "ð¥ Intake Panel": [
         "pages/10_intake/01_queue.py",
         "pages/10_intake/02_claim_review.py",
         "pages/10_intake/03_triage_action.py",
         "pages/10_intake/04_audit_log.py",
     ],
-    "🔧 Provider Panel": [
+    "ð§ Provider Panel": [
         "pages/20_provider/01_assigned_claims.py",
         "pages/20_provider/02_submit_report.py",
         "pages/20_provider/03_settlement_view.py",
     ],
-    "🏦 Finance": [
+    "ð¦ Finance": [
         "pages/40_finance/01_reserves.py",
         "pages/40_finance/02_settlement.py",
     ],
-    "⚖️ Legal": [
+    "âï¸ Legal": [
         "pages/50_legal/01_legal_review.py",
         "pages/50_legal/02_appeals_register.py",
     ],
-    "⚙️ Operations": [
+    "âï¸ Operations": [
         "pages/60_operations/01_discharge_voucher.py",
         "pages/60_operations/02_fast_track.py",
     ],
-    "🛡️ Admin Console": [
+    "ð¡ï¸ Admin Console": [
         "pages/30_admin/01_overview.py",
         "pages/30_admin/02_config_editor.py",
         "pages/30_admin/03_user_management.py",
@@ -56,21 +57,21 @@ PAGE_STRUCTURE = {
 }
 
 ROLE_ACCESS = {
-    "client":           ["🏠 Home", "📋 Claimant Portal"],
-    "claims_officer":   ["📥 Intake Panel", "📋 Claimant Portal"],
-    "head_of_claims":   ["📥 Intake Panel", "⚙️ Operations"],
-    "assessor":         ["🔧 Provider Panel"],
-    "investigator":     ["🔧 Provider Panel"],
-    "garage":           ["🔧 Provider Panel"],
-    "spare_parts":      ["🔧 Provider Panel"],
-    "finance":          ["🏦 Finance"],
-    "legal":            ["⚖️ Legal"],
-    "admin":            ["🛡️ Admin Console", "🏦 Finance", "⚖️ Legal", "⚙️ Operations"],
-    "super_admin":      ["🛡️ Admin Console", "🏦 Finance", "⚖️ Legal", "⚙️ Operations", "📥 Intake Panel", "🔧 Provider Panel", "📋 Claimant Portal"],
-    "cfo":              ["🏦 Finance", "🛡️ Admin Console"],
-    "manager":          ["🛡️ Admin Console"],
-    "surveyor":         ["🔧 Provider Panel"],
-    "motor_fleet":      ["📋 Claimant Portal"],
+    "client":           ["ð  Home", "ð Claimant Portal"],
+    "claims_officer":   ["ð¥ Intake Panel", "ð Claimant Portal"],
+    "head_of_claims":   ["ð¥ Intake Panel", "âï¸ Operations"],
+    "assessor":         ["ð§ Provider Panel"],
+    "investigator":     ["ð§ Provider Panel"],
+    "garage":           ["ð§ Provider Panel"],
+    "spare_parts":      ["ð§ Provider Panel"],
+    "finance":          ["ð¦ Finance"],
+    "legal":            ["âï¸ Legal"],
+    "admin":            ["ð¡ï¸ Admin Console", "ð¦ Finance", "âï¸ Legal", "âï¸ Operations"],
+    "super_admin":      ["ð¡ï¸ Admin Console", "ð¦ Finance", "âï¸ Legal", "âï¸ Operations", "ð¥ Intake Panel", "ð§ Provider Panel", "ð Claimant Portal"],
+    "cfo":              ["ð¦ Finance", "ð¡ï¸ Admin Console"],
+    "manager":          ["ð¡ï¸ Admin Console"],
+    "surveyor":         ["ð§ Provider Panel"],
+    "motor_fleet":      ["ð Claimant Portal"],
 }
 
 def init() -> None:
@@ -81,7 +82,7 @@ def init() -> None:
         st.session_state["cfg"] = config_db.get_config()
 
 def login_page() -> None:
-    st.html("<div style='text-align:center;margin-bottom:1rem'><h1>🏢 Definite Assurance</h1><p style='color:#666'>Claims Management Portal</p></div>")
+    st.html("<div style='text-align:center;margin-bottom:1rem'><h1>ð¢ Definite Assurance</h1><p style='color:#666'>Claims Management Portal</p></div>")
     email = st.text_input("Email", placeholder="claims_officer@insure.demo", label_visibility="collapsed")
     password = st.text_input("Password", type="password", placeholder="Officer#99", label_visibility="collapsed")
     if st.button("Sign In", type="primary", use_container_width=True):
@@ -89,22 +90,22 @@ def login_page() -> None:
             st.rerun()
         else:
             st.error("Invalid credentials. Try a demo account.")
-    with st.expander("📋 Demo Accounts"):
+    with st.expander("ð Demo Accounts"):
         for email_addr, info in auth.DEMO_USERS.items():
             st.caption(f"**{info["name"]}** ({info["role"]}): `{email_addr}` / `{info["password"]}`")
 
 def sidebar_nav() -> str:
-    st.sidebar.title("🏢 Definite Assurance")
+    st.sidebar.title("ð¢ Definite Assurance")
     st.sidebar.caption("Claims Portal v2.0")
     st.sidebar.divider()
     user = auth.current_user()
-    st.sidebar.success(f"✅ {user["name"]}")
+    st.sidebar.success(f"â {user["name"]}")
     st.sidebar.caption(f"Role: {user["role"].replace("_", " ").title()}")
     st.sidebar.divider()
     allowed = ROLE_ACCESS.get(user["role"], [])
     selected = st.sidebar.radio("Navigation", allowed, index=None, placeholder="Choose a section...")
     st.sidebar.divider()
-    if st.sidebar.button("🚪 Sign Out"):
+    if st.sidebar.button("ðª Sign Out"):
         auth.logout()
         st.rerun()
     return selected
@@ -126,14 +127,14 @@ def render_page(page_path: str) -> None:
             st.error(f"Could not load page: {page_path}")
 
 def main() -> None:
-    st.set_page_config(page_title="Definite Assurance — Claims Portal", page_icon="🏢", layout="wide")
+    st.set_page_config(page_title="Definite Assurance â Claims Portal", page_icon="ð¢", layout="wide")
     init()
     if not st.session_state.get("authenticated"):
         login_page()
         return
     selected = sidebar_nav()
     if not selected:
-        st.title("🏢 Definite Assurance — Claims Portal")
+        st.title("ð¢ Definite Assurance â Claims Portal")
         st.success("Welcome! Select a section from the sidebar.")
         col1, col2, col3 = st.columns(3)
         col1.metric("Portal", "Claims v2.0")
