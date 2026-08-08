@@ -8,14 +8,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import streamlit as st
 from datetime import datetime
 
-# Import lib modules
 import config_db
 import core_engine
 from core_engine import get_engine, ClaimStatus
 import lib.auth as auth
 import lib.helpers as helpers
 
-# ─── Page definitions ────────────────────────────────────────────────────────
 PAGE_STRUCTURE = {
     "🏠 Home": [],
     "📋 Claimant Portal": [
@@ -84,7 +82,7 @@ def init() -> None:
 
 def login_page() -> None:
     st.set_page_config(page_title="Definite Assurance — Claims Portal", page_icon="🏢", layout="centered")
-    st.html("<div style=\"text-align:center;margin-bottom:1rem\"><h1>🏢 Definite Assurance</h1><p style=\"color:#666\">Claims Management Portal</p></div>")
+    st.html("<div style='text-align:center;margin-bottom:1rem'><h1>🏢 Definite Assurance</h1><p style='color:#666'>Claims Management Portal</p></div>")
     email = st.text_input("Email", placeholder="claims_officer@insure.demo", label_visibility="collapsed")
     password = st.text_input("Password", type="password", placeholder="Officer#99", label_visibility="collapsed")
     if st.button("Sign In", type="primary", use_container_width=True):
@@ -96,13 +94,13 @@ def login_page() -> None:
         for email_addr, info in auth.DEMO_USERS.items():
             st.caption(f"**{info['name']}** ({info['role']}): `{email_addr}` / `{info['password']}`")
 
-def sidebar_nav() -> None:
+def sidebar_nav() -> str:
     st.sidebar.title("🏢 Definite Assurance")
     st.sidebar.caption("Claims Portal v2.0")
     st.sidebar.divider()
     user = auth.current_user()
     st.sidebar.success(f"✅ {user['name']}")
-    st.sidebar.caption(f"Role: {user['role'].replace('_',' ').title()}")
+    st.sidebar.caption(f"Role: {user['role'].replace('_', ' ').title()}")
     st.sidebar.divider()
     allowed = ROLE_ACCESS.get(user["role"], [])
     selected = st.sidebar.radio("Navigation", allowed, index=None, placeholder="Choose a section...")
@@ -115,7 +113,7 @@ def sidebar_nav() -> None:
 def render_page(page_path: str) -> None:
     user = auth.current_user()
     with st.spinner(f"Loading {page_path}..."):
-        import importlib.util, sys
+        import importlib.util
         spec = importlib.util.spec_from_file_location("page_module", page_path)
         if spec and spec.loader:
             mod = importlib.util.module_from_spec(spec)
@@ -126,7 +124,7 @@ def render_page(page_path: str) -> None:
             else:
                 st.info("Page loaded but has no render() function.")
         else:
-            st.error(f"Could not load page: {page_path}" )
+            st.error(f"Could not load page: {page_path}")
 
 def main() -> None:
     init()
@@ -137,23 +135,19 @@ def main() -> None:
     if not selected:
         st.set_page_config(layout="wide")
         st.title("🏢 Definite Assurance — Claims Portal")
-        st.success("Welcome! Select a section from the sidebar to begin.")
+        st.success("Welcome! Select a section from the sidebar.")
         col1, col2, col3 = st.columns(3)
         col1.metric("Portal", "Claims v2.0")
         col2.metric("Build", "Railway-Mig")
         col3.metric("Date", datetime.now().strftime("%Y-%m-%d"))
         return
-    section_pages = {}
-    for section, pages in PAGE_STRUCTURE.items():
-        for p in pages:
-            section_pages[p] = section
     page_path = None
     for section, pages in PAGE_STRUCTURE.items():
         if section == selected and pages:
             page_path = pages[0]
             break
     if not page_path:
-        st.error("No page configured for this section.")
+        st.error("No page configured.")
         return
     render_page(page_path)
 
