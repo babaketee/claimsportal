@@ -1,5 +1,38 @@
-"\"\\"\\"Track My Claim — pages/00_claimant/03_track_claim.py\"\\"\\"
-\"\\"\\"\nRole: client\nSearch by claim reference and view status, TAT breakdown, audit trail.\n\"\\"\\"\n\nimport sys, os\nsys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))\nimport core_engine\nfrom core_engine import get_engine\nimport streamlit as st\nimport pandas as pd\nimport json\n\ndef _tat_ms(ms: int) -> str:\n    d,r = divmod(int(ms),86400000); h,r2=divmod(r,3600000); m,s=divmod(r2,60000)\n    parts=[]\n    if d: parts.append(f\"{d}d\"); 
-    if h: parts.append(f\"{h}h\"); 
-    if m: parts.append(f\"{m}m\"); 
-    return \" \".join(parts) if parts else \"0m\"\n\ndef render(user_email: str) -> None:\n    st.title(\"🔍 Track My Claim\")\n    search_ref = st.text_input(\"Enter Claim Reference\", placeholder=\"CLM-XXXXXXXX\")\n    if not search_ref:\n        st.info(\"Enter your claim reference above.\")\n        return\n    engine = get_engine()\n    claim = engine.get_claim(search_ref)\n    if not claim:\n        st.warning(\"Claim not found.\")\n        return\n    col1, col2, col3 = st.columns(3)\n    col1.metric(\"Status\", claim.get(\"status\",\"Unknown\"))\n    col2.metric(\"Class\", claim.get(\"claim_class\",\"N/A\").replace(\"_\",\" \").title())\n    col3.metric(\"Policy\", claim.get(\"policy_ref\",\"N/A\"))\n    st.markdown(\"---—\")\n    st.subheader(\"Audit Trail\")\n    try:\n        history = engine.audit.get_history(\"claim\", search_ref)\n    except:\n        history = []\n    if history:\n        rows = [{\"When\": str(h.get(\"timestamp\",\"\"))[:19], \"Action\": h.get(\"action\",\"\"), \"User\": h.get(\"user_id\",\"\")} for h in history]\n        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)\n    else:\n        st.info(\"No audit entries yet.\")
+"""Track My Claim — pages/00_claimant/03_track_claim.py"""
+"""
+Role: client
+Search by claim reference and view status, TAT breakdown, audit trail.
+"""
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+import core_engine
+from core_engine import get_engine
+import streamlit as st
+import pandas as pd
+
+def render(user_email: str, user_role: str = "client") -> None:
+    st.title("🔍 Track My Claim")
+    search_ref = st.text_input("Enter Claim Reference", placeholder="CLM-XXXXXXXX")
+    if not search_ref:
+        st.info("Enter your claim reference above.")
+        return
+    engine = get_engine()
+    claim = engine.get_claim(search_ref)
+    if not claim:
+        st.warning("Claim not found.")
+        return
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Status", claim.get("status","Unknown"))
+    col2.metric("Class", claim.get("claim_class","N/A").replace("_"," ").title())
+    col3.metric("Policy", claim.get("policy_ref","N/A"))
+    st.markdown("---")
+    st.subheader("Audit Trail")
+    try:
+        history = engine.audit.get_history("claim", search_ref)
+    except:
+        history = []
+    if history:
+        rows = [{"When": str(h.get("timestamp",""))[:19], "Action": h.get("action",""), "User": h.get("actor_id","")} for h in history]
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    else:
+        st.info("No audit entries yet.")
