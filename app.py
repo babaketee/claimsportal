@@ -81,7 +81,6 @@ def init() -> None:
         st.session_state["cfg"] = config_db.get_config()
 
 def login_page() -> None:
-    st.set_page_config(page_title="Definite Assurance — Claims Portal", page_icon="🏢", layout="centered")
     st.html("<div style='text-align:center;margin-bottom:1rem'><h1>🏢 Definite Assurance</h1><p style='color:#666'>Claims Management Portal</p></div>")
     email = st.text_input("Email", placeholder="claims_officer@insure.demo", label_visibility="collapsed")
     password = st.text_input("Password", type="password", placeholder="Officer#99", label_visibility="collapsed")
