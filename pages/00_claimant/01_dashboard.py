@@ -1,4 +1,4 @@
-"""Claimant Dashboard â pages/00_claimant/01_dashboard.py"""
+"""Claimant Dashboard Ã¢ÂÂ pages/00_claimant/01_dashboard.py"""
 """
 Role: client
 Landing page: show all claims for logged-in user, status badges, TAT timers.
@@ -28,7 +28,7 @@ def _status_color(s: str) -> str:
     return map_.get(s, "gray")
 
 def render(user_email: str, user_role: str = "client") -> None:
-        st.title("ð  My Claims Dashboard")
+        st.title("Ã°ÂÂÂ  My Claims Dashboard")
     engine = get_engine()
     all_claims = []
     for status in ["Draft","Reported","Triage","Investigation","Assessment","Approval",
@@ -61,5 +61,7 @@ def render(user_email: str, user_role: str = "client") -> None:
             "Amount": f"KES {c.get('estimated_amount',0):,.0f}",
         })
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+if __name__ == "__main__":
+    render("test@insure.demo", "client")
 if __name__ == "__main__":
     render("test@insure.demo", "client")
