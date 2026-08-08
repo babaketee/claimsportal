@@ -54,7 +54,6 @@ def main():
     user = auth.current_user()
     role = user["role"]
     
-    # Role-based page access
     all_pages = [
         ("Home", home_page, "🏠", "home"),
         ("Claimant Portal", "pages/00_claimant/01_dashboard.py", "👤", None),
