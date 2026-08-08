@@ -1,4 +1,4 @@
-"""Legal Review — pages/50_legal/01_legal_review.py"""
+"""Legal Review â pages/50_legal/01_legal_review.py"""
 """Role: legal. Legal review of claims with legal holds."""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -9,7 +9,7 @@ import pandas as pd
 import json
 
 def render(user_email: str, user_role: str = "legal") -> None:
-    st.title("⚖️ Legal Review")
+    st.title("âï¸ Legal Review")
     engine = get_engine()
     st.subheader("Claims with Legal Holds")
     rows = []
@@ -26,7 +26,7 @@ def render(user_email: str, user_role: str = "legal") -> None:
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
     else:
         st.info("No legal holds active.")
-    st.markdown("---—")
+    st.markdown("---â")
     ref = st.text_input("Search Claim", placeholder="CLM-XXXXXXXX")
     if ref:
         claim = engine.get_claim(ref)
@@ -34,3 +34,5 @@ def render(user_email: str, user_role: str = "legal") -> None:
             st.json(claim)
         else:
             st.warning("Not found.")
+if __name__ == "__main__":
+    render("test@insure.demo", "legal")
