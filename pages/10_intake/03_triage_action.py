@@ -1,2 +1,32 @@
-\"\\"\\"Triage Action — pages/10_intake/03_triage_action.py\"\\"\\"
-\"\\"\\"Role: claims_officer, head_of_claims. Assign triage decision: standard, fast-track, or escalate.\"\\"\\"\nimport sys, os\nsys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))\nimport core_engine\nfrom core_engine import get_engine, ClaimStatus\nimport core_api\nimport streamlit as st\n\ndef render(user_email: str, user_role: str = \"claims_officer\") -> None:\n    st.title(\"⚡ Triage Action\")\n    ref = st.text_input(\"Claim Reference\", placeholder=\"CLM-XXXXXXXX\")\n    if not ref:\n        st.info(\"Enter claim reference.\"); return\n    engine = get_engine()\n    claim = engine.get_claim(ref)\n    if not claim:\n        st.warning(\"Claim not found.\"); return\n    current_status = claim.get(\"status\",\"\")\n    st.write(f\"Current status: **{current_status}**\")\n    decision = st.selectbox(\"Triage Decision\", [\"standard\",\"fast_track\",\"escalated\",\"repudiate\"], help=\"Route the claim through the appropriate path.\")\n    notes = st.text_area(\"Triage Notes\", placeholder=\"Reason for decision...\")\n    assigned_to = st.text_input(\"Assign To (email)\")\n    if st.button(\"Submit Triage Decision\", type=\"primary\"):\n        try:\n            if current_status == \"Triage\":\n                engine.transition_to(ref, ClaimStatus.INVESTIGATION, user_email, triage_decision=decision, notes=notes)\n            st.success(f\"Claim {ref} triaged as {decision}.\")\n            if hasattr(core_api,\"receive_triage_decision\"):\n                core_api.receive_triage_decision(ref, decision, assigned_to or user_email)\n        except Exception as e:\n            st.error(f\"Error: {e}\")
+"""Triage Action — pages/10_intake/03_triage_action.py"""
+"""
+Role: claims_officer, head_of_claims
+Assign a claims officer and set route after triage.
+"""
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+import core_engine
+from core_engine import get_engine, ClaimStatus
+import streamlit as st
+
+def render(user_email: str, user_role: str = "claims_officer") -> None:
+    st.title("⚡ Triage Action")
+    ref = st.text_input("Claim Reference", placeholder="CLM-XXXXXXXX")
+    if not ref:
+        st.info("Enter claim reference.")
+        return
+    engine = get_engine()
+    claim = engine.get_claim(ref)
+    if not claim:
+        st.warning("Claim not found."); return
+    st.json(claim)
+    st.markdown("---")
+    triage_options = ["Investigator","Assessor","Legal Review","Decline"]
+    triage_decision = st.selectbox("Triage Decision", triage_options)
+    assigned_to = st.text_input("Assign To (email)", placeholder="assessor@insure.demo")
+    if st.button("Confirm Triage", type="primary"):
+        try:
+            engine.transition_to(ref, ClaimStatus.INVESTIGATION, user_email, triage_decision=triage_decision, assigned_to=assigned_to)
+            st.success(f"Claim {ref} triaged and assigned.")
+        except Exception as e:
+            st.error(f"Error: {e}")
