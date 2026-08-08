@@ -50,20 +50,54 @@ def main():
     if not st.session_state.get("authenticated"):
         login_page()
         return
-    pages = st.navigation([
-        st.Page(home_page, title="Home", icon="🏠", url_path="home"),
-        st.Page("pages/00_claimant/01_dashboard.py", title="Claimant Portal", icon="👤"),
-        st.Page("pages/10_intake/01_queue.py", title="Intake Panel", icon="📋"),
-        st.Page("pages/20_provider/01_assigned_claims.py", title="Provider Panel", icon="🔧"),
-        st.Page("pages/40_finance/01_reserves.py", title="Finance", icon="💰"),
-        st.Page("pages/50_legal/01_legal_review.py", title="Legal", icon="⚖️"),
-        st.Page("pages/60_operations/01_discharge_voucher.py", title="Operations", icon="📄"),
-        st.Page("pages/30_admin/01_overview.py", title="Admin Console", icon="🖥️"),
-    ])
+    
     user = auth.current_user()
+    role = user["role"]
+    
+    # Role-based page access
+    all_pages = [
+        ("Home", home_page, "🏠", "home"),
+        ("Claimant Portal", "pages/00_claimant/01_dashboard.py", "👤", None),
+        ("Intake Panel", "pages/10_intake/01_queue.py", "📋", None),
+        ("Provider Panel", "pages/20_provider/01_assigned_claims.py", "🔧", None),
+        ("Finance", "pages/40_finance/01_reserves.py", "💰", None),
+        ("Legal", "pages/50_legal/01_legal_review.py", "⚖️", None),
+        ("Operations", "pages/60_operations/01_discharge_voucher.py", "📄", None),
+        ("Admin Console", "pages/30_admin/01_overview.py", "🖥️", None),
+    ]
+    
+    role_access = {
+        "client": [0, 1],
+        "claims_officer": [0, 1, 2, 6],
+        "head_of_claims": [0, 1, 2, 6],
+        "assessor": [0, 1, 3],
+        "investigator": [0, 1, 3],
+        "garage": [0, 1, 3],
+        "spare_parts": [0, 1, 3],
+        "surveyor": [0, 1, 3],
+        "finance": [0, 4],
+        "cfo": [0, 4],
+        "legal": [0, 5],
+        "admin": list(range(8)),
+        "super_admin": list(range(8)),
+        "manager": list(range(8)),
+    }
+    
+    allowed = role_access.get(role, [0])
+    
+    nav_pages = []
+    for idx in allowed:
+        title, page, icon, url_path = all_pages[idx]
+        if url_path:
+            nav_pages.append(st.Page(page, title=title, icon=icon, url_path=url_path))
+        else:
+            nav_pages.append(st.Page(page, title=title, icon=icon))
+    
+    pages = st.navigation(nav_pages)
+    
     st.sidebar.title("Definite Assurance")
     st.sidebar.text(f"Logged in: {user['name']}")
-    st.sidebar.text(f"Role: {user['role']}")
+    st.sidebar.text(f"Role: {role}")
     if st.sidebar.button("Sign Out"):
         auth.logout()
         st.rerun()
