@@ -1,5 +1,5 @@
-"""Claimant Dashboard Ã¢ÂÂ pages/00_claimant/01_dashboard.py"""
 """
+Claimant Dashboard - pages/00_claimant/01_dashboard.py
 Role: client
 Landing page: show all claims for logged-in user, status badges, TAT timers.
 """
@@ -21,14 +21,8 @@ def _tat_ms(elapsed_ms: int) -> str:
     if m: parts.append(f"{m}m")
     return " ".join(parts) if parts else "0m"
 
-def _status_color(s: str) -> str:
-    map_ = {"Draft":"gray","Reported":"blue","Triage":"yellow","Investigation":"orange",
-            "Assessment":"purple","Approval":"cyan","Approved":"green","Pending Payment":"lime",
-            "Paid":"green","Closed":"gray"}
-    return map_.get(s, "gray")
-
 def render(user_email: str, user_role: str = "client") -> None:
-        st.title("Ã°ÂÂÂ  My Claims Dashboard")
+    st.title("My Claims Dashboard")
     engine = get_engine()
     all_claims = []
     for status in ["Draft","Reported","Triage","Investigation","Assessment","Approval",
@@ -49,7 +43,7 @@ def render(user_email: str, user_role: str = "client") -> None:
     col3.metric("Medical", m["medical"])
     st.markdown("---")
     if not all_claims:
-        st.info("No claims found. Submit a new claim to get started.")
+        st.info("No claims found.")
         return
     rows = []
     for c in sorted(all_claims, key=lambda x: x.get("created_at",""), reverse=True):
@@ -61,7 +55,6 @@ def render(user_email: str, user_role: str = "client") -> None:
             "Amount": f"KES {c.get('estimated_amount',0):,.0f}",
         })
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-if __name__ == "__main__":
-    render("test@insure.demo", "client")
+
 if __name__ == "__main__":
     render("test@insure.demo", "client")
