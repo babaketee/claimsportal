@@ -1,41 +1,34 @@
-"""Admin Overview â pages/30_admin/01_overview.py"""
-"""Role: admin, super_admin. KPIs, queue depths, system health."""
+"""
+Admin Overview - pages/30_admin/01_overview.py
+Role: admin, super_admin, manager, cfo
+Overview of all claims across the system.
+"""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 import core_engine
-from core_engine import get_engine, ClaimStatus
+from core_engine import get_engine
 import streamlit as st
+import pandas as pd
 
 def render(user_email: str, user_role: str = "admin") -> None:
-    st.title("ð¡ï¸ Admin Console â Overview")
+    st.title("Admin Overview")
     engine = get_engine()
-    col1, col2, col3, col4 = st.columns(4)
-    total = 0
-    open_count = 0
-    statuses = ["Draft","Reported","Triage","Investigation","Assessment","Approval","Approved","Under Repair","Reinspection","Pending Payment"]
-    for s in statuses:
-        try:
-            n = len(engine.get_claims_by_status(s))
-            total += n
-            open_count += n
-        except: n = 0
-    closed_count = 0
-    for s in ["Paid","Closed","Closed_Approved","Closed_Repudiated","Closed_Total_Loss"]:
-        try: closed_count += len(engine.get_claims_by_status(s))
-        except: pass
-    col1.metric("Total Claims", total + closed_count)
-    col2.metric("Open Claims", open_count)
-    col3.metric("Closed Claims", closed_count)
-    col4.metric("Fast Track", sum(1 for s in statuses if 1==1))
-    st.markdown("---â")
-    st.subheader("Claims by Status")
-    rows = []
-    for s in statuses + ["Paid","Closed"]:
-        try:
-            n = len(engine.get_claims_by_status(s))
-            if n: rows.append({"Status": s, "Count": n})
-        except: pass
-    import pandas as pd
-    if rows: st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    try:
+        rows = []
+        for status in ["Draft","Reported","Triage","Investigation","Assessment","Approval","Approved","Pending Payment","Paid","Closed"]:
+            for c in engine.get_claims_by_status(status):
+                rows.append({
+                    "Claim Ref": c.get("claim_ref",""),
+                    "Class": c.get("claim_class","").replace("_"," ").title(),
+                    "Status": c.get("status",""),
+                    "Amount": f"KES {c.get('estimated_amount',0):,.0f}",
+                })
+        if rows:
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        else:
+            st.info("No claims found.")
+    except Exception as e:
+        st.error(f"Error: {e}")
+
 if __name__ == "__main__":
     render("test@insure.demo", "admin")
