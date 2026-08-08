@@ -34,29 +34,26 @@ def login_page():
         for email_addr, info in auth.DEMO_USERS.items():
             st.caption(f"{info['name']} ({info['role']})")
 
-def home_page():
-    st.title("Claims Portal v2.0")
-    st.success("Welcome! Select a section from the navigation above.")
-
-# Streamlit native pages - uses pages/00_claimant/, pages/10_intake/, etc.
-pages = st.navigation([
-    st.Page(home_page, title="Home", icon="🏠", url_path="home"),
-    st.Page("pages/00_claimant/01_dashboard.py", title="Claimant Portal", icon="👤"),
-    st.Page("pages/10_intake/01_queue.py", title="Intake Panel", icon="📋"),
-    st.Page("pages/20_provider/01_assigned_claims.py", title="Provider Panel", icon="🔧"),
-    st.Page("pages/40_finance/01_reserves.py", title="Finance", icon="💰"),
-    st.Page("pages/50_legal/01_legal_review.py", title="Legal", icon="⚖️"),
-    st.Page("pages/60_operations/01_discharge_voucher.py", title="Operations", icon="📄"),
-    st.Page("pages/30_admin/01_overview.py", title="Admin Console", icon="🖥️"),
-])
-
 def main():
     st.set_page_config(page_title="Claims Portal", page_icon="🏢", layout="wide")
     init()
     if not st.session_state.get("authenticated"):
         login_page()
         return
-    # Show user info in sidebar
+    
+    # Build navigation AFTER auth check - only for authenticated users
+    pages = st.navigation([
+        st.Page(lambda: None, title="Home", icon="🏠", url_path="home"),
+        st.Page("pages/00_claimant/01_dashboard.py", title="Claimant Portal", icon="👤"),
+        st.Page("pages/10_intake/01_queue.py", title="Intake Panel", icon="📋"),
+        st.Page("pages/20_provider/01_assigned_claims.py", title="Provider Panel", icon="🔧"),
+        st.Page("pages/40_finance/01_reserves.py", title="Finance", icon="💰"),
+        st.Page("pages/50_legal/01_legal_review.py", title="Legal", icon="⚖️"),
+        st.Page("pages/60_operations/01_discharge_voucher.py", title="Operations", icon="📄"),
+        st.Page("pages/30_admin/01_overview.py", title="Admin Console", icon="🖥️"),
+    ])
+    
+    # User info in sidebar
     user = auth.current_user()
     st.sidebar.title("Definite Assurance")
     st.sidebar.text(f"Logged in: {user['name']}")
@@ -64,7 +61,7 @@ def main():
     if st.sidebar.button("Sign Out"):
         auth.logout()
         st.rerun()
-    # Run the selected page
+    
     pages.run()
 
 if __name__ == "__main__":
