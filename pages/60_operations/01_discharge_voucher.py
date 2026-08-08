@@ -1,4 +1,4 @@
-"""Discharge Voucher — pages/60_operations/01_discharge_voucher.py"""
+"""Discharge Voucher â pages/60_operations/01_discharge_voucher.py"""
 """Role: finance, claims_officer. Sign and manage discharge vouchers. Phase 2 spec R5."""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -8,7 +8,7 @@ import streamlit as st
 
 def _fmt(amount): return f"KES {amount:,.0f}"
 def render(user_email: str, user_role: str = "finance") -> None:
-    st.title("📄 Discharge Voucher")
+    st.title("ð Discharge Voucher")
     ref = st.text_input("Claim Reference", placeholder="CLM-XXXXXXXX")
     if not ref:
         st.info("Enter claim reference."); return
@@ -22,7 +22,7 @@ def render(user_email: str, user_role: str = "finance") -> None:
     col1.metric("Status", status)
     col2.metric("Est. Amount", _fmt(claim.get("estimated_amount", 0)))
     col3.metric("DV Signed", "Yes" if dv_signed else "No")
-    st.markdown("---—")
+    st.markdown("---â")
     st.subheader("Discharge Voucher Details")
     st.write(f"**Claimant:** {claim.get('claimant_email','N/A')}")
     st.write(f"**Claim Ref:** {ref}")
@@ -42,3 +42,5 @@ def render(user_email: str, user_role: str = "finance") -> None:
                     st.error(f"Error: {e}")
         else:
             st.info(f"Claim must be at Approved or Pending Payment status. Currently: {status}.")
+if __name__ == "__main__":
+    render("test@insure.demo", "finance")
