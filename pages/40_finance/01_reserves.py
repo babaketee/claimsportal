@@ -1,4 +1,4 @@
-"""Reserves Management — pages/40_finance/01_reserves.py"""
+"""Reserves Management â pages/40_finance/01_reserves.py"""
 """Role: finance, cfo. View and manage claim reserves. Phase 2 spec R3."""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -10,7 +10,7 @@ import pandas as pd
 
 def _fmt(amount): return f"KES {amount:,.0f}"
 def render(user_email: str, user_role: str = "finance") -> None:
-    st.title("🏦 Reserve Management")
+    st.title("ð¦ Reserve Management")
     ref = st.text_input("Claim Reference", placeholder="CLM-XXXXXXXX")
     if not ref:
         st.info("Enter claim reference."); return
@@ -23,7 +23,7 @@ def render(user_email: str, user_role: str = "finance") -> None:
     st.metric("Estimated Loss", _fmt(est))
     st.metric("Reserve Held", _fmt(reserve))
     st.metric("Reserve Remaining", _fmt(max(0, reserve - est)))
-    st.markdown("---—")
+    st.markdown("---â")
     st.subheader("Reserve Movements")
     rows = []
     try:
@@ -46,3 +46,5 @@ def render(user_email: str, user_role: str = "finance") -> None:
             st.success("Reserve movement recorded.")
         except Exception as e:
             st.error(f"Error: {e}")
+if __name__ == "__main__":
+    render("test@insure.demo", "finance")
