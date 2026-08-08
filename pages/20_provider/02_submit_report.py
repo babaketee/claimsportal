@@ -1,2 +1,34 @@
-\"\\"\\"Submit Report — pages/20_provider/02_submit_report.py\"\\"\\"
-\"\\"\\"Role: assessor, investigator. Upload assessment/investigation report.\"\\"\\"\nimport sys, os\nsys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))\nimport core_engine\nfrom core_engine import get_engine, ClaimStatus\nimport streamlit as st\n\ndef render(user_email: str, user_role: str = \"assessor\") -> None:\n    st.title(\"📝 Submit Report\")\n    ref = st.text_input(\"Claim Reference *\", placeholder=\"CLM-XXXXXXXX\")\n    if not ref:\n        st.info(\"Enter claim reference.\"); return\n    engine = get_engine()\n    claim = engine.get_claim(ref)\n    if not claim:\n        st.warning(\"Claim not found.\"); return\n    report_type = st.selectbox(\"Report Type\", [\"Assessment Report\",\"Investigation Report\",\"Survey Report\"])\n    findings = st.text_area(\"Findings\", height=150, placeholder=\"Detailed findings...\")\n    recommended_amount = st.number_input(\"Recommended Amount (KES)\"), min_value=0, step=10000, format=\"%d\")\n    uploaded = st.file_uploader(\"Upload Report (PDF)\"), type=[\"pdf\"], accept_multiple_files=False)\n    if st.button(\"Submit Report\", type=\"primary\"):\n        try:\n            if user_role == \"assessor\":\n                engine.transition_to(ref, ClaimStatus.APPROVAL, user_email, findings=findings, recommended_amount=recommended_amount)\n            else:\n                engine.transition_to(ref, ClaimStatus.INVESTIGATION, user_email, findings=findings)\n            st.success(f\"Report submitted for {ref}.\")\n        except Exception as e:\n            st.error(f\"Error: {e}\")
+"""Submit Report — pages/20_provider/02_submit_report.py"""
+"""
+Role: assessor, investigator
+Submit assessment or investigation report for an assigned claim.
+"""
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+import core_engine
+from core_engine import get_engine
+import streamlit as st
+
+def render(user_email: str, user_role: str = "assessor") -> None:
+    st.title("📝 Submit Report")
+    ref = st.text_input("Claim Reference", placeholder="CLM-XXXXXXXX")
+    if not ref:
+        st.info("Enter claim reference.")
+        return
+    engine = get_engine()
+    claim = engine.get_claim(ref)
+    if not claim:
+        st.warning("Claim not found."); return
+    if claim.get("assigned_to") != user_email:
+        st.warning("This claim is not assigned to you.")
+        return
+    st.json(claim)
+    st.markdown("---")
+    findings = st.text_area("Findings / Assessment Report", height=150)
+    recommended = st.number_input("Recommended Amount (KES)", min_value=0, step=10000, format="%d")
+    if st.button("Submit Report", type="primary"):
+        try:
+            engine.transition_to(ref, "Assessment", user_email, findings=findings, recommended_amount=float(recommended))
+            st.success(f"Report submitted for {ref}.")
+        except Exception as e:
+            st.error(f"Error: {e}")
