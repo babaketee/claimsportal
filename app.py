@@ -54,6 +54,7 @@ def main():
     user = auth.current_user()
     role = user["role"]
     
+    # Role-based page access
     all_pages = [
         ("Home", home_page, "🏠", "home"),
         ("Claimant Portal", "pages/00_claimant/01_dashboard.py", "👤", None),
@@ -65,6 +66,7 @@ def main():
         ("Admin Console", "pages/30_admin/01_overview.py", "🖥️", None),
     ]
     
+    # Role access rules: role -> list of page indices allowed (0=Home, 1=Claimant, etc.)
     role_access = {
         "client": [0, 1],
         "claims_officer": [0, 1, 2, 6],
@@ -82,7 +84,7 @@ def main():
         "manager": list(range(8)),
     }
     
-    allowed = role_access.get(role, [0])
+    allowed = role_access.get(role, [0])  # fallback: Home only
     
     nav_pages = []
     for idx in allowed:
@@ -101,6 +103,7 @@ def main():
         auth.logout()
         st.rerun()
     pages.run()
+
 
 if __name__ == "__main__":
     main()
