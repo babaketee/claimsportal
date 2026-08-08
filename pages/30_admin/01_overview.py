@@ -1,4 +1,4 @@
-"""Admin Overview — pages/30_admin/01_overview.py"""
+"""Admin Overview â pages/30_admin/01_overview.py"""
 """Role: admin, super_admin. KPIs, queue depths, system health."""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -7,7 +7,7 @@ from core_engine import get_engine, ClaimStatus
 import streamlit as st
 
 def render(user_email: str, user_role: str = "admin") -> None:
-    st.title("🛡️ Admin Console — Overview")
+    st.title("ð¡ï¸ Admin Console â Overview")
     engine = get_engine()
     col1, col2, col3, col4 = st.columns(4)
     total = 0
@@ -27,7 +27,7 @@ def render(user_email: str, user_role: str = "admin") -> None:
     col2.metric("Open Claims", open_count)
     col3.metric("Closed Claims", closed_count)
     col4.metric("Fast Track", sum(1 for s in statuses if 1==1))
-    st.markdown("---—")
+    st.markdown("---â")
     st.subheader("Claims by Status")
     rows = []
     for s in statuses + ["Paid","Closed"]:
@@ -37,3 +37,5 @@ def render(user_email: str, user_role: str = "admin") -> None:
         except: pass
     import pandas as pd
     if rows: st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+if __name__ == "__main__":
+    render("test@insure.demo", "admin")
