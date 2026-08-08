@@ -1,3 +1,59 @@
-"\"\\"\\"New Claim (FNOL) — pages/00_claimant/02_new_claim.py\"\\"\\"
-\"\\"\\"\nRole: client\nFirst Notification of Loss form — verify policy, enter incident details, submit.\n\"\\"\\"\n\nimport sys, os\nsys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))\nimport core_engine\nfrom core_engine import get_engine, ClaimStatus\nimport core_api\nimport uuid\nimport streamlit as st\n\ndef render(user_email: str) -> None:\n    st.title(\"📋 New Claim (FNOL)\")\n    st.info(\"Complete all sections. Fields marked * are mandatory.\")\n    col1, col2 = st.columns(2)\n    id_type = col1.selectbox(\"ID Type *\", [\"National ID\",\"Passport\",\"Foreign ID\"])\n    id_number = col2.text_input(\"ID / Passport Number *\", placeholder=\"12345678\")\n    policy_data = None\n    if id_number and len(id_number) >= 4:\n        with st.spinner(\"Verifying policy...\"):\n            policy_data = core_api.verify_policy(id_number)\n        if policy_data:\n            st.success(f\"Policy found: **{policy_data.get(\"policy_ref\",\"N/A\")}** — {policy_data.get(\"product\",\"Motor\")}\"))\n        else:\n            st.warning(\"No active policy found. Contact your agent or branch.\")\n    st.markdown(\"#### Incident Details\")\n    col3, col4 = st.columns(2)\n    incident_type = col3.selectbox(\"Incident Type *\", [\"Road Accident\",\"Theft/Break-in\",\"Fire\",\"Flood\",\"Landslide\",\"Broken Glass\",\"Windscreen Damage\",\"Other\"])\n    incident_date = col4.date_input(\"Date of Incident *\")\n    description = st.text_area(\"Description of Incident *\", height=100)\n    st.markdown(\"#### Vehicle / Item Details\")\n    col5, col6 = st.columns(2)\n    vehicle_reg = col5.text_input(\"Vehicle Registration *\", placeholder=\"KBZ 000A\")\n    estimated_amount = col6.number_input(\"Estimated Loss (KES) *\", min_value=0, step=10000, format=\"%d\")\n    st.markdown(\"---—\")\n    if st.button(\"Submit Claim\", type=\"primary\", use_container_width=True):\n        if not all([id_number, incident_type, str(incident_date), description, vehicle_reg]):\n            st.error(\"Please fill all mandatory fields.\")\n            return\n        claim_ref = f\"CLM-{uuid.uuid4().hex[:8].upper()}\"\n        engine = get_engine()\n        try:\n            engine.create_claim(\n                claim_ref=claim_ref,\n                policy_ref=policy_data.get(\"policy_ref\") if policy_data else \"UNKNOWN\",\n                id_number=id_number,\n                vehicle_reg=vehicle_reg,\n                incident_type=incident_type,\n                description=description,\n                claim_class=\"motor\",\n                user_id=user_email,\n            )\n            engine.transition_to(claim_ref, ClaimStatus.REPORTED, user_email)\n            st.success(f\"Claim {claim_ref} submitted successfully!\")\n            st.balloons()\n        except Exception as e:\n            st.error(f\"Failed: {e}\")
+"""New Claim (FNOL) — pages/00_claimant/02_new_claim.py"""
+"""
+Role: client
+First Notification of Loss form — verify policy, enter incident details, submit.
+"""
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+import core_engine
+from core_engine import get_engine, ClaimStatus
+import core_api
+import uuid
+import streamlit as st
 
+def render(user_email: str, user_role: str = "client") -> None:
+    st.title("📋 New Claim (FNOL)")
+    st.info("Complete all sections. Fields marked * are mandatory.")
+    col1, col2 = st.columns(2)
+    id_type = col1.selectbox("ID Type *", ["National Id","Passport","Foreign Id"])
+    id_number = col2.text_input("ID / Passport Number *", placeholder="12345678")
+    policy_data = None
+    if id_number and len(id_number) >= 4:
+        with st.spinner("Verifying policy..."):
+            policy_data = core_api.verify_policy(id_number)
+        if policy_data:
+            st.success(f"Policy found: **{policy_data.get('policy_ref','N/A')}** - {policy_data.get('product','Motor')}")
+        else:
+            st.warning("No active policy found. Contact your agent or branch.")
+    st.markdown("#### Incident Details")
+    col3, col4 = st.columns(2)
+    incident_type = col3.selectbox("Incident Type *", ["Road Accident","Theft/Break-in","Fire","Flood","Landslide","Broken Glass","Windscreen Damage","Other"])
+    incident_date = col4.date_input("Date of Incident *")
+    description = st.text_area("Description of Incident *", height=100)
+    st.markdown("#### Vehicle / Item Details")
+    col5, col6 = st.columns(2)
+    vehicle_reg = col5.text_input("Vehicle Registration *", placeholder="KBZ 000A")
+    estimated_amount = col6.number_input("Estimated Loss (KES) *", min_value=0, step=10000, format="%d")
+    st.markdown("---")
+    if st.button("Submit Claim", type="primary", use_container_width=True):
+        if not all([id_number, incident_type, str(incident_date), description, vehicle_reg]):
+            st.error("Please fill all mandatory fields.")
+            return
+        claim_ref = f"CLM-{uuid.uuid4().hex[:8].upper()}"
+        engine = get_engine()
+        try:
+            engine.create_claim(
+                claim_ref=claim_ref,
+                policy_ref=policy_data.get("policy_ref") if policy_data else "UNKNOWN",
+                id_number=id_number,
+                vehicle_reg=vehicle_reg,
+                incident_type=incident_type,
+                description=description,
+                claim_class="motor",
+                user_id=user_email,
+            )
+            engine.transition_to(claim_ref, ClaimStatus.REPORTED, user_email)
+            st.success(f"Claim {claim_ref} submitted successfully!")
+            st.balloons()
+        except Exception as e:
+            st.error(f"Failed: {e}")
