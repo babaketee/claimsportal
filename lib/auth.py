@@ -4,20 +4,20 @@
 import streamlit as st
 
 DEMO_USERS = {
-    "client@insure.demo":        {"name":"Jane Policyholder","role":"client","password":"Client#99"},
-    "claims_officer@insure.demo":{"name":"Caleb Officer","role":"claims_officer","password":"Officer#99"},
-    "head_of_claims@insure.demo":{"name":"Diana HOC","role":"head_of_claims","password":"HOC#99"},
-    "assessor@insure.demo":      {"name":"Felix Assessor","role":"assessor","password":"Survey#99"},
-    "investigator@insure.demo":  {"name":"Ivan Investigator","role":"investigator","password":"Sleuth#99"},
-    "garage@insure.demo":        {"name":"George Garage","role":"garage","password":"Wrench#99"},
-    "spare_parts@insure.demo":   {"name":"Sara Spares","role":"spare_parts","password":"Catalog#99"},
-    "finance@insure.demo":        {"name":"Fatima Finance","role":"finance","password":"Invoice#99"},
-    "admin@insure.demo":         {"name":"Ada Admin","role":"admin","password":"SysCtrl#99"},
-    "super@insure.demo":          {"name":"Sam Super","role":"super_admin","password":"Super#99"},
-    "legal@insure.demo":         {"name":"Lara Legal","role":"legal","password":"Counsel#99"},
-    "manager@insure.demo":       {"name":"Mary Manager","role":"manager","password":"Manager#99"},
-    "surveyor@insure.demo":      {"name":"Steve Surveyor","role":"surveyor","password":"Survey#99"},
-    "motor_fleet@insure.demo":   {"name":"Molly Fleet","role":"motor_fleet","password":"Fleet#99"},
+    "client@insure.demo":           {"name": "Assured",         "role": "client",           "password": "Demo#99"},
+    "claims_officer@insure.demo":  {"name": "Caleb Officer",   "role": "claims_officer",    "password": "Demo#99"},
+    "head_of_claims@insure.demo":  {"name": "Diana HOC",       "role": "head_of_claims",    "password": "Demo#99"},
+    "assessor@insure.demo":         {"name": "Felix Assessor",  "role": "assessor",          "password": "Demo#99"},
+    "investigator@insure.demo":    {"name": "Ivan Investigator","role": "investigator",     "password": "Demo#99"},
+    "garage@insure.demo":          {"name": "George Garage",   "role": "garage",            "password": "Demo#99"},
+    "spare_parts@insure.demo":     {"name": "Sam Spares",      "role": "spare_parts",       "password": "Demo#99"},
+    "finance@insure.demo":         {"name": "Fatima Finance",  "role": "finance",           "password": "Demo#99"},
+    "admin@insure.demo":           {"name": "Ada Admin",       "role": "admin",             "password": "Demo#99"},
+    "super@insure.demo":           {"name": "Sam Super",       "role": "super_admin",       "password": "Demo#99"},
+    "legal@insure.demo":           {"name": "Lara Legal",     "role": "legal",             "password": "Demo#99"},
+    "manager@insure.demo":         {"name": "Mary Manager",   "role": "manager",           "password": "Demo#99"},
+    "surveyor@insure.demo":        {"name": "Steve Surveyor",  "role": "surveyor",          "password": "Demo#99"},
+    "motor_fleet@insure.demo":     {"name": "Molly Fleet",    "role": "motor_fleet",       "password": "Demo#99"},
 }
 
 ROLE_LABELS = {
