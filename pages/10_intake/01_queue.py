@@ -1,4 +1,4 @@
-"""Intake Queue — pages/10_intake/01_queue.py"""
+"""Intake Queue â pages/10_intake/01_queue.py"""
 """
 Role: claims_officer, head_of_claims
 Shows submitted claims awaiting triage and review.
@@ -11,7 +11,7 @@ import streamlit as st
 import pandas as pd
 
 def render(user_email: str, user_role: str = "claims_officer") -> None:
-    st.title("📥 Intake Queue")
+    st.title("ð¥ Intake Queue")
     engine = get_engine()
     statuses = ["Reported","Triage"]
     all_rows = []
@@ -28,3 +28,5 @@ def render(user_email: str, user_role: str = "claims_officer") -> None:
              "Created": str(c.get("created_at",""))[:10]} for c in all_rows]
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
     st.markdown(f"**Total: {len(rows)} claims**")
+if __name__ == "__main__":
+    render("test@insure.demo", "claims_officer")
