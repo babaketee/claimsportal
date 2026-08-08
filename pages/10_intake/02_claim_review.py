@@ -1,2 +1,35 @@
-\"\\"\\"Claim Review — pages/10_intake/02_claim_review.py\"\\"\\"
-\"\\"\\"Role: claims_officer, head_of_claims. Full claim detail view for review.\"\\"\\"\nimport sys, os\nsys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))\nimport core_engine\nfrom core_engine import get_engine\nimport streamlit as st\nimport json\n\ndef render(user_email: str, user_role: str = \"claims_officer\") -> None:\n    st.title(\"🔎 Claim Review\")\n    ref = st.text_input(\"Claim Reference\", placeholder=\"CLM-XXXXXXXX\")\n    if not ref:\n        st.info(\"Enter a claim reference.\"); return\n    engine = get_engine()\n    claim = engine.get_claim(ref)\n    if not claim:\n        st.warning(\"Claim not found.\"); return\n    col1, col2, col3 = st.columns(3)\n    col1.metric(\"Status\", claim.get(\"status\",\"N/A\"))\n    col2.metric(\"Class\", claim.get(\"claim_class\",\"N/A\").replace(\"_\",\" \").title())\n    col3.metric(\"Policy\", claim.get(\"policy_ref\",\"N/A\"))\n    st.subheader(\"Claim Details\")\n    st.json(claim)\n    st.subheader(\"Audit Trail\")\n    try:\n        for h in engine.audit.get_history(\"claim\", ref):\n            st.write(f\"**{str(h.get(\"timestamp\",\"\"))[:19]}** — {h.get(\"action\",\"\")} by {h.get(\"user_id\",\"\")}\")\n    except: st.info(\"No audit history.\")
+"""Claim Review — pages/10_intake/02_claim_review.py"""
+"""
+Role: claims_officer, head_of_claims
+Review a claim and move it through triage/investigation/assessment stages.
+"""
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+import core_engine
+from core_engine import get_engine, ClaimStatus
+import streamlit as st
+
+def render(user_email: str, user_role: str = "claims_officer") -> None:
+    st.title("🔎 Claim Review")
+    ref = st.text_input("Claim Reference", placeholder="CLM-XXXXXXXX")
+    if not ref:
+        st.info("Enter claim reference to review.")
+        return
+    engine = get_engine()
+    claim = engine.get_claim(ref)
+    if not claim:
+        st.warning("Claim not found."); return
+    st.json(claim)
+    st.markdown("---")
+    st.subheader("Take Action")
+    current = claim.get("status","")
+    col1, col2 = st.columns(2)
+    notes = col1.text_area("Notes", placeholder="Decision notes...")
+    findings = col2.text_area("Findings", placeholder="Key findings...")
+    next_status = st.selectbox("Move to", [s for s in ClaimStatus.STATUSES if s != current])
+    if st.button("Transition Claim", type="primary"):
+        try:
+            result = engine.transition_to(ref, next_status, user_email, notes=notes, findings=findings)
+            st.success(f"Moved {ref} -> {next_status}")
+        except Exception as e:
+            st.error(f"Error: {e}")
