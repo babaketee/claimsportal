@@ -169,7 +169,11 @@ class ClaimsEngine:
         self.db.commit()
 
     def _seed_demo_if_empty(self):
-        count = self.db.execute("SELECT COUNT(*) FROM claims").fetchone()[0]
+        # Delete any stale demo data so INSERT runs fresh
+        self.db.execute("DELETE FROM claims")
+        self.db.execute("DELETE FROM reserve_movements")
+        now = time.time() * 1000
+        claims_data = [0]
         if count > 0:
             return
         now = time.time() * 1000
@@ -224,12 +228,20 @@ class ClaimsEngine:
             ("CLM-00000015", "increase", 800000, "finance", now - 86400000*6, "Cardiac case initial reserve"),
         ]
         self.db.executemany("""
+            INSERT INTO claims (claim_ref, policy_ref, claimant_email, status,
+            status_changed_at, created_at, updated_at, incident_date, incident_type,
+            incident_location, incident_description, estimated_amount, claim_class,
+            fast_track, total_loss_indicator, assigned_to, assigned_role, external_ref,
+            salvage_value, discharge_voucher_signed, discharge_voucher_date, appeal_filed,
+            appeal_ref, extra_data)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, claims_data)
+        self.db.commit()
+        self.db.executemany("""
             INSERT OR IGNORE INTO reserve_movements (claim_ref, movement_type, amount, created_by, created_at, currency)
             VALUES (?, ?, ?, ?, ?, 'KES')
         """, reserves)
-        self.db.commit()
-
-    def is_total_loss(self, claim_ref: str) -> bool:
+        self.db.commit()    def is_total_loss(self, claim_ref: str) -> bool:
         row = self.db.execute("SELECT estimated_amount, sum_insured FROM claims WHERE claim_ref=?",
                                (claim_ref,)).fetchone()
         if not row:
