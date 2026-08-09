@@ -173,10 +173,6 @@ class ClaimsEngine:
         self.db.execute("DELETE FROM claims")
         self.db.execute("DELETE FROM reserve_movements")
         now = time.time() * 1000
-        claims_data = [0]
-        if count > 0:
-            return
-        now = time.time() * 1000
         claims_data = [
             # Motor claims
             ("CLM-00000001", "POL-2024-M001", "client@insure.demo", "Reported", now - 86400000*8, now - 86400000*8, now - 86400000*7, "2026-06-28", "Road Accident", "Ngong Road, Nairobi", "Rear-end collision on Ngong Road", 85000, "motor", 0, 0, None, None, "NRB/2026/4455", 78000, None, None, None, "{"vehicle_reg":"KAB-123A","claimant_name":"Assured","loss_date":"2026-06-28"}"),
