@@ -168,7 +168,7 @@ class ClaimsEngine:
         ''')
         self.db.commit()
 
-    def _seed_demo_if_empty(self):
+    def _seed_demo_if_empty_DISABLED(self):
         # Delete any stale demo data so INSERT runs fresh
         self.db.execute("DELETE FROM claims")
         self.db.execute("DELETE FROM reserve_movements")
