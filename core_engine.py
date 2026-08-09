@@ -220,7 +220,7 @@ class ClaimsEngine:
         ]
         self.db.executemany("""
             INSERT OR IGNORE INTO reserve_movements (claim_ref, movement_type, amount, created_by, created_at, currency)
-            VALUES (?, ?, ?, ?, ?, 'KES')
+            VALUES (?, ?, ?, ?, ?, ?)
         """, reserves)
         self.db.commit()
 
