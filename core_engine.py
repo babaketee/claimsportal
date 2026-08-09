@@ -173,37 +173,60 @@ class ClaimsEngine:
         if count > 0:
             return
         now = time.time() * 1000
-        demos = [
-            ("CLM-00000001", "POL-2024-001", "Jane Policyholder",
-             "client@insure.demo", "Reported", 250000, "motor", 0),
-            ("CLM-00000002", "POL-2024-002", "John Motorist",
-             "client@insure.demo", "Triage", 85000, "motor", 1),
-            ("CLM-00000003", "POL-2024-003", "Alice Third Party",
-             "client@insure.demo", "Investigation", 450000, "motor_tp", 0),
-            ("CLM-00000004", "POL-2024-004", "Bob Fleet Driver",
-             "motor_fleet@insure.demo", "Assessment", 120000, "motor", 1),
-            ("CLM-00000005", "POL-2024-005", "Carol Medical",
-             "client@insure.demo", "Approval", 75000, "medical", 0),
-            ("CLM-00000006", "POL-2024-006", "Dave Insured",
-             "client@insure.demo", "Pending Payment", 310000, "motor", 0),
-            ("CLM-00000007", "POL-2024-007", "Eve Third Party BI",
-             "client@insure.demo", "Reported", 1200000, "motor_tp_bi", 0),
-            ("CLM-00000008", "POL-2024-008", "Frank Owner",
-             "client@insure.demo", "Closed_Approved", 95000, "motor", 0),
-            ("CLM-00000009", "POL-2024-009", "Grace Insured",
-             "client@insure.demo", "Closed_Repudiated", 200000, "motor", 0),
-            ("CLM-00000010", "POL-2024-010", "Henry Total Loss",
-             "client@insure.demo", "Closed_Total_Loss", 1800000, "motor", 0),
+        claims_data = [
+            # Motor claims
+            ("CLM-00000001", "POL-2024-M001", "client@insure.demo", "Reported", now - 86400000*8, now - 86400000*8, now - 86400000*7, "2026-06-28", "Road Accident", "Ngong Road, Nairobi", "Rear-end collision on Ngong Road", 85000, "motor", 0, 0, None, None, "NRB/2026/4455", 78000, None, None, None, "{"vehicle_reg":"KAB-123A","claimant_name":"Assured","loss_date":"2026-06-28"}"),
+            ("CLM-00000002", "POL-2024-M002", "client@insure.demo", "Assessment", now - 86400000*6, now - 86400000*6, now - 86400000*5, "2026-07-01", "Road Accident", "Waiyaki Way, Nairobi", "Side-impact collision Waiyaki Way", 120000, "motor", 0, 0, None, None, "NRB/2026/4488", 115000, None, None, None, "{"vehicle_reg":"KBC-456D","claimant_name":"Assured","loss_date":"2026-07-01"}"),
+            ("CLM-00000003", "POL-2024-M003", "assessor@insure.demo", "Approved", now - 86400000*25, now - 86400000*25, now - 86400000*24, "2026-06-10", "Windscreen Damage", "Mombasa Road", "Windscreen damage Mombasa Rd", 65000, "motor", 0, 0, None, None, None, 62000, None, None, None, "{"vehicle_reg":"KCZ-789E","claimant_name":"Assured","loss_date":"2026-06-10"}"),
+            ("CLM-00000004", "POL-2024-M004", "client@insure.demo", "Closed_Approved", now - 86400000*45, now - 86400000*45, now - 86400000*44, "2026-05-15", "Road Accident", "Karen, Nairobi", "Parked car hit by unknown vehicle", 45000, "motor", 0, 0, None, None, None, 43500, None, None, None, "{"vehicle_reg":"KDE-101F","claimant_name":"Assured","loss_date":"2026-05-15"}"),
+            ("CLM-00000005", "POL-2024-M005", "investigator@insure.demo", "Closed_Repudiated", now - 86400000*38, now - 86400000*38, now - 86400000*37, "2026-05-28", "Theft", "Westlands, Nairobi", "Theft of vehicle from parking", 200000, "motor", 0, 0, None, None, None, None, None, None, None, "{"vehicle_reg":"KFG-202G","claimant_name":"Assured","loss_date":"2026-05-28"}"),
+            ("CLM-00000006", "POL-2024-M006", "officer@insure.demo", "Reported", now - 86400000*4, now - 86400000*4, now - 86400000*3, "2026-07-06", "Road Accident", "Nairobi", "Minor dent on bonnet Highway", 95000, "motor", 0, 0, None, None, None, 90000, None, None, None, "{"vehicle_reg":"KHJ-303K","claimant_name":"Caleb Officer","loss_date":"2026-07-06"}"),
+            ("CLM-00000007", "POL-2024-M007", "hoc@insure.demo", "Assessment", now - 86400000*5, now - 86400000*5, now - 86400000*4, "2026-07-02", "Road Accident", "Mombasa Road", "Multi-vehicle pile-up", 150000, "motor", 0, 0, None, None, "NRB/2026/4521", 140000, None, None, None, "{"vehicle_reg":"KKL-404L","claimant_name":"Diana HOC","loss_date":"2026-07-02"}"),
+            ("CLM-00000008", "POL-2024-M008", "surveyor@insure.demo", "Closed_Approved", now - 86400000*95, now - 86400000*95, now - 86400000*94, "2026-04-05", "Windscreen Damage", "Kisumu", "Windscreen crack", 38000, "motor", 0, 0, None, None, None, 36500, None, None, None, "{"vehicle_reg":"KMN-505M","claimant_name":"Steve Surveyor","loss_date":"2026-04-05"}"),
+            ("CLM-00000009", "POL-2024-M009", "motor_fleet@insure.demo", "Assessment", now - 86400000*1, now - 86400000*1, now, "2026-07-07", "Road Accident", "Mombasa", "Fleet vehicle accident Mombasa", 220000, "motor", 0, 0, None, None, "NRB/2026/4555", 210000, None, None, None, "{"vehicle_reg":"KOP-606P","claimant_name":"Molly Fleet","loss_date":"2026-07-07"}"),
+            ("CLM-00000010", "POL-2024-M010", "manager@insure.demo", "Reported", now, now, now, "2026-07-08", "Road Accident", "Nairobi", "Rear mirror damage", 75000, "motor", 0, 0, None, None, None, None, None, None, None, "{"vehicle_reg":"KQR-707R","claimant_name":"Mary Manager","loss_date":"2026-07-08"}"),
+            ("CLM-00000011", "POL-2024-M011", "officer@insure.demo", "Closed_Approved", now - 86400000*105, now - 86400000*105, now - 86400000*104, "2026-04-20", "Road Accident", "Eldoret", "Bumper damage Eldoret", 55000, "motor", 0, 0, None, None, None, 53000, None, None, None, "{"vehicle_reg":"KST-808S","claimant_name":"Caleb Officer","loss_date":"2026-04-20"}"),
+            ("CLM-00000012", "POL-2024-M012", "surveyor@insure.demo", "Closed_Repudiated", now - 86400000*30, now - 86400000*30, now - 86400000*29, "2026-06-05", "Road Accident", "Thika Road", "Suspected fraud - staged accident", 180000, "motor", 0, 0, None, None, "NRB/2026/4388", None, None, None, None, "{"vehicle_reg":"KUV-909U","claimant_name":"Steve Surveyor","loss_date":"2026-06-05"}"),
+            ("CLM-00000013", "POL-2024-M013", "legal@insure.demo", "Assessment", now - 86400000*7, now - 86400000*7, now - 86400000*6, "2026-06-28", "Road Accident", "Nairobi", "Third party bodily injury claim", 300000, "motor", 0, 0, None, None, "NRB/2026/4422", 290000, None, None, None, "{"vehicle_reg":"KWX-101X","claimant_name":"Lara Legal","loss_date":"2026-06-28"}"),
+            # Medical claims
+            ("CLM-00000014", "POL-2024-H001", "client@insure.demo", "Reported", now - 86400000*3, now - 86400000*3, now - 86400000*2, "2026-07-04", None, "Nairobi", "Emergency appendectomy", 350000, "medical", 0, 0, "Nairobi Hospital", None, None, None, None, None, None, "{"hospital_name":"Nairobi Hospital","claimant_name":"Assured","loss_date":"2026-07-04"}"),
+            ("CLM-00000015", "POL-2024-H002", "assessor@insure.demo", "Assessment", now - 86400000*7, now - 86400000*7, now - 86400000*6, "2026-06-30", None, "Nairobi", "Cardiac bypass surgery", 850000, "medical", 0, 0, "Aga Khan University Hospital", None, None, None, None, None, None, "{"hospital_name":"Aga Khan University Hospital","claimant_name":"Assured","loss_date":"2026-06-30"}"),
+            ("CLM-00000016", "POL-2024-H003", "investigator@insure.demo", "Investigation", now - 86400000*14, now - 86400000*14, now - 86400000*13, "2026-06-20", None, "Nairobi", "Maternity cover delivery complicated", 120000, "medical", 0, 0, "Mater Hospital", None, None, None, None, None, None, "{"hospital_name":"Mater Hospital","claimant_name":"Assured","loss_date":"2026-06-20"}"),
+            ("CLM-00000017", "POL-2024-H004", "garage@insure.demo", "Approved", now - 86400000*30, now - 86400000*30, now - 86400000*29, "2026-06-05", None, "Nairobi", "RTA fractures sustained", 180000, "medical", 0, 0, "Kenyatta National Hospital", None, None, None, None, None, None, "{"hospital_name":"Kenyatta National Hospital","claimant_name":"George Garage","loss_date":"2026-06-05"}"),
+            ("CLM-00000018", "POL-2024-H005", "client@insure.demo", "Closed_Approved", now - 86400000*60, now - 86400000*60, now - 86400000*59, "2026-05-10", None, "Mombasa", "Asthma attack ICU admission", 95000, "medical", 0, 0, "MP Shah Hospital", None, None, None, None, None, None, "{"hospital_name":"MP Shah Hospital","claimant_name":"Assured","loss_date":"2026-05-10"}"),
+            ("CLM-00000019", "POL-2024-H006", "spares@insure.demo", "Closed_Repudiated", now - 86400000*38, now - 86400000*38, now - 86400000*37, "2026-05-28", None, "Nairobi", "Cosmetic dental procedure claim", 45000, "medical", 0, 0, "Gertrudes Children Hospital", None, None, None, None, None, None, "{"hospital_name":"Gertrudes Children Hospital","claimant_name":"Sam Spares","loss_date":"2026-05-28"}"),
+            ("CLM-00000020", "POL-2024-H007", "spares@insure.demo", "Assessment", now - 86400000*11, now - 86400000*11, now - 86400000*10, "2026-06-25", None, "Eldoret", "Optical cataract surgery", 220000, "medical", 0, 0, "Moi Referral Hospital", None, None, None, None, None, None, "{"hospital_name":"Moi Referral Hospital","claimant_name":"Sam Spares","loss_date":"2026-06-25"}"),
+            ("CLM-00000021", "POL-2024-H008", "motor_fleet@insure.demo", "Approved", now - 86400000*50, now - 86400000*50, now - 86400000*49, "2026-06-18", None, "Nairobi", "Employee health cover - appendectomy", 65000, "medical", 0, 0, "Gertrudes Hospital", None, None, None, None, None, None, "{"hospital_name":"Gertrudes Hospital","claimant_name":"Molly Fleet","loss_date":"2026-06-18"}"),
+            ("CLM-00000022", "POL-2024-H009", "manager@insure.demo", "Investigation", now - 86400000*6, now - 86400000*6, now - 86400000*5, "2026-06-30", None, "Nairobi", "Cancer chemotherapy sessions", 500000, "medical", 0, 0, "Mater Hospital", None, None, None, None, None, None, "{"hospital_name":"Mater Hospital","claimant_name":"Mary Manager","loss_date":"2026-06-30"}"),
+            ("CLM-00000023", "POL-2024-H010", "officer@insure.demo", "Assessment", now - 86400000*3, now - 86400000*3, now - 86400000*2, "2026-07-05", None, "Nairobi", "Accident emergency treatment", 140000, "medical", 0, 0, "Nairobi Hospital", None, None, None, None, None, None, "{"hospital_name":"Nairobi Hospital","claimant_name":"Caleb Officer","loss_date":"2026-07-05"}"),
+            # Life claims
+            ("CLM-00000024", "POL-2024-L001", "client@insure.demo", "Reported", now - 86400000*2, now - 86400000*2, now - 86400000*1, "2026-07-01", None, "Kisumu", "Death benefit - natural causes", 5000000, "life", 0, 0, None, "Grace Wanjiku", None, None, None, None, None, "{"beneficiary_name":"Grace Wanjiku","claimant_name":"Assured","loss_date":"2026-07-01"}"),
+            ("CLM-00000025", "POL-2024-L002", "hoc@insure.demo", "Assessment", now - 86400000*8, now - 86400000*8, now - 86400000*7, "2026-06-28", None, "Nairobi", "Critical illness - cancer diagnosis", 3000000, "life", 0, 0, None, "John Mwangi", None, None, None, None, None, "{"beneficiary_name":"John Mwangi","claimant_name":"Diana HOC","loss_date":"2026-06-28"}"),
+            ("CLM-00000026", "POL-2024-L003", "finance@insure.demo", "Approved", now - 86400000*25, now - 86400000*25, now - 86400000*24, "2026-06-10", None, "Eldoret", "Total Permanent Disability payout", 2000000, "life", 0, 0, None, "Mary Njeri", None, None, None, None, None, "{"beneficiary_name":"Mary Njeri","claimant_name":"Fatima Finance","loss_date":"2026-06-10"}"),
+            ("CLM-00000027", "POL-2024-L004", "legal@insure.demo", "Closed_Approved", now - 86400000*75, now - 86400000*75, now - 86400000*74, "2026-05-20", None, "Nakuru", "Funeral expense reimbursement", 750000, "life", 0, 0, None, "Susan Ochieng", None, None, None, None, None, "{"beneficiary_name":"Susan Ochieng","claimant_name":"Lara Legal","loss_date":"2026-05-20"}"),
+            ("CLM-00000028", "POL-2024-L005", "admin@insure.demo", "Closed_Repudiated", now - 86400000*34, now - 86400000*34, now - 86400000*33, "2026-05-30", None, "Nairobi", "Critical illness - stroke (pre-existing condition)", 1500000, "life", 0, 0, None, "James Kamau", None, None, None, None, None, "{"beneficiary_name":"James Kamau","claimant_name":"Ada Admin","loss_date":"2026-05-30"}"),
+            ("CLM-00000029", "POL-2024-L006", "motor_fleet@insure.demo", "Approved", now - 86400000*52, now - 86400000*52, now - 86400000*51, "2026-06-15", None, "Mombasa", "Group life - employee death", 1000000, "life", 0, 0, None, "Ali Hassan", None, None, None, None, None, "{"beneficiary_name":"Ali Hassan","claimant_name":"Molly Fleet","loss_date":"2026-06-15"}"),
+            ("CLM-00000030", "POL-2024-L007", "surveyor@insure.demo", "Reported", now - 86400000*1, now - 86400000*1, now, "2026-07-05", None, "Kisumu", "Critical illness - heart surgery", 2500000, "life", 0, 0, None, "Rose Atieno", None, None, None, None, None, "{"beneficiary_name":"Rose Atieno","claimant_name":"Steve Surveyor","loss_date":"2026-07-05"}"),
         ]
-        for ref, pol, name, email, status, amt, cls, ft in demos:
-            self.db.execute("""
-                INSERT INTO claims (claim_ref, policy_ref, claimant_email, status,
-                status_changed_at, created_at, updated_at, estimated_amount,
-                claim_class, fast_track, incident_description)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (ref, pol, email, status, now, now - 86400000*3,
-                      now - 86400000*2, amt, cls, ft,
-                      "Demo claim for " + name))
+        self.db.executemany("""
+            INSERT OR IGNORE INTO claims (claim_ref, policy_ref, claimant_email, status,
+            status_changed_at, created_at, updated_at, incident_date, incident_type,
+            incident_location, incident_description, estimated_amount, claim_class,
+            fast_track, total_loss_indicator, assigned_to, assigned_role, external_ref,
+            salvage_value, discharge_voucher_signed, discharge_voucher_date, appeal_filed,
+            appeal_ref, extra_data)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, claims_data)
+        # Seed reserve movements for selected claims
+        reserves = [
+            ("CLM-00000002", "increase", 100000, "finance", now - 86400000*5, "Initial reserve set"),
+            ("CLM-00000007", "increase", 130000, "finance", now - 86400000*4, "Multi-vehicle reserve"),
+            ("CLM-00000015", "increase", 800000, "finance", now - 86400000*6, "Cardiac case initial reserve"),
+        ]
+        self.db.executemany("""
+            INSERT OR IGNORE INTO reserve_movements (claim_ref, movement_type, amount, created_by, created_at, currency)
+            VALUES (?, ?, ?, ?, ?, 'KES')
+        """, reserves)
         self.db.commit()
 
     def is_total_loss(self, claim_ref: str) -> bool:
