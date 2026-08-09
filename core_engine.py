@@ -171,7 +171,7 @@ class ClaimsEngine:
     def _seed_demo_if_empty(self):
         # Delete any stale demo data so INSERT runs fresh
         self.db.execute("DELETE FROM claims")
-        self.db.execute("DELETE FROM reserve_movements")
+        claims_data = [
             ("CLM-00000002", "POL-2024-M002", "client@insure.demo", "Assessment", now - 86400000*6, now - 86400000*6, now - 86400000*5, "2026-07-01", "Road Accident", "Waiyaki Way, Nairobi", "Side-impact collision Waiyaki Way", 120000, "motor", 0, 0, None, None, "NRB/2026/4488", 115000, None, None, None, "{"vehicle_reg":"KBC-456D","claimant_name":"Assured","loss_date":"2026-07-01"}"),
             ("CLM-00000003", "POL-2024-M003", "assessor@insure.demo", "Approved", now - 86400000*25, now - 86400000*25, now - 86400000*24, "2026-06-10", "Windscreen Damage", "Mombasa Road", "Windscreen damage Mombasa Rd", 65000, "motor", 0, 0, None, None, None, 62000, None, None, None, "{"vehicle_reg":"KCZ-789E","claimant_name":"Assured","loss_date":"2026-06-10"}"),
             ("CLM-00000004", "POL-2024-M004", "client@insure.demo", "Closed_Approved", now - 86400000*45, now - 86400000*45, now - 86400000*44, "2026-05-15", "Road Accident", "Karen, Nairobi", "Parked car hit by unknown vehicle", 45000, "motor", 0, 0, None, None, None, 43500, None, None, None, "{"vehicle_reg":"KDE-101F","claimant_name":"Assured","loss_date":"2026-05-15"}"),
