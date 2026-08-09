@@ -214,9 +214,9 @@ class ClaimsEngine:
         """, claims_data)
         self.db.commit()
         reserves = [
-            ("CLM-00000002", "increase", 100000, "finance", now - 86400000*5, "Initial reserve set"),
-            ("CLM-00000007", "increase", 130000, "finance", now - 86400000*4, "Multi-vehicle reserve"),
-            ("CLM-00000015", "increase", 800000, "finance", now - 86400000*6, "Cardiac case initial reserve"),
+            ("CLM-00000002", "increase", 100000, "finance", "Initial reserve set", now - 86400000*5),
+            ("CLM-00000007", "increase", 130000, "finance", "Multi-vehicle reserve", now - 86400000*4),
+            ("CLM-00000015", "increase", 800000, "finance", "Cardiac case initial reserve", now - 86400000*6),
         ]
         self.db.executemany("""
             INSERT OR IGNORE INTO reserve_movements (claim_ref, movement_type, amount, created_by, created_at, currency)
