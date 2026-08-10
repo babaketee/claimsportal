@@ -97,7 +97,7 @@ def _process_payment(settlement_id: str, claim_ref: str) -> None:
                     channel="sms",
                     direction="outbound",
                     summary=f"Payment processed: KES {settlement['net_amount']:,.0f} to {settlement['payee_name']}",
-                    created_by=st.session_state.get("user", ""),
+                    created_by=st.session_state.get("user_email", ""),
                     contact_phone=""
                 )
             else:

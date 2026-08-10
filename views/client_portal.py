@@ -200,25 +200,24 @@ def _render_timeline(events: list[dict]) -> None:
                 f"margin:2px 0 2px 10px'></div>"
             )
         )
-        note_html = (
-            f"<div style='font-size:0.78em;color:#888;margin-top:2px'>{note}</div>"
-            if note else ""
+        note_html = f"<div style='font-size:0.78em;color:#888;margin-top:2px'>{note}</div>" if note else ""
+        template = (
+            "            <div style='display:flex;gap:14px'>\n"
+            "              <div style='display:flex;flex-direction:column;align-items:center;min-width:22px'>\n"
+            "                <span style='font-size:1.15em;line-height:1'>{dot}</span>\n"
+            "                {connector}\n"
+            "              </div>\n"
+            "              <div style='padding-bottom:10px;flex:1'>\n"
+            "                <div style='font-weight:600;font-size:0.94em;color:#1a1a1a'>{title}</div>\n"
+            "                <div style='font-size:0.78em;color:#666;margin-top:1px'>\n"
+            "                  {ts}{actor_html}\n"
+            "                </div>\n"
+            "                {note_html}\n"
+            "              </div>\n"
+            "            </div>\n"
         )
-        rows.append(f"""
-            <div style='display:flex;gap:14px'>
-              <div style='display:flex;flex-direction:column;align-items:center;min-width:22px'>
-                <span style='font-size:1.15em;line-height:1'>{dot}</span>
-                {connector}
-              </div>
-              <div style='padding-bottom:10px;flex:1'>
-                <div style='font-weight:600;font-size:0.94em;color:#1a1a1a'>{title}</div>
-                <div style='font-size:0.78em;color:#666;margin-top:1px'>
-                  {ts}{(" &nbsp;\u00b7&nbsp; " + actor) if actor else ""}
-                </div>
-                {note_html}
-              </div>
-            </div>
-        """)
+        actor_html = (" &nbsp;\u00b7&nbsp; " + actor) if actor else ""
+        rows.append(template.format(dot=dot, connector=connector, title=title, ts=ts, actor_html=actor_html, note_html=note_html))
 
     st.markdown(
         "<div style='font-family:sans-serif;padding:6px 0'>"
@@ -240,7 +239,7 @@ def render() -> None:
     with tab_fnol:
         _fnol_form()
     with tab_track:
-        _claim_tracker()
+        _claim_tracker(st.session_state.get("user_email", ""))
     with tab_docs:
         _my_documents()
 
@@ -333,12 +332,12 @@ def _fnol_form() -> None:
                     tp_vehicle_reg=tp_reg,       tp_driver_name=tp_name,
                     tp_phone=tp_phone,           tp_insurer=tp_insurer,
                     police_station=police_stn,   ob_number=ob_number,
-                    submitted_by=st.session_state.get("user", ""),
+                    submitted_by=st.session_state.get("user_email", ""),
                 )
                 core_api.post_claim({
                     "claim_ref": claim_ref, "policy_number": policy_number,
                     "incident_type": incident_type, "status": "Submitted",
-                    "submitted_by": st.session_state.get("user", ""),
+                    "submitted_by": st.session_state.get("user_email", ""),
                 })
                 for f_obj, doc_type, label in [
                     (drivers_license, "drivers_license", "Driver's License"),

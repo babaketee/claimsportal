@@ -21,13 +21,13 @@ def render(user_email: str, user_role: str = "admin") -> None:
             st.info("No pending config changes.")
         else:
             for p in pending:
-                st.write(f"**{p["key"]}** — proposed by {p["proposed_by"]}")
-                st.write(f"Value: {str(p["proposed_value"])}[:100]")
+                st.write(f"**{p['key']}** — proposed by {p['proposed_by']}")
+                st.write(f"Value: {str(p['proposed_value'])[:100]}")
                 col1, col2 = st.columns(2)
-                if col1.button(f"Approve", key=f"approve_{p["approval_id"]}"):
-                    result = cfg.approve(p["approval_id"], user_email)
+                if col1.button(f"Approve", key=f"approve_{p['approval_id']}"):
+                    result = cfg.approve(p['approval_id'], user_email)
                     st.success(result)
-                if col2.button(f"Reject", key=f"reject_{p["approval_id"]}"):
-                    result = cfg.reject(p["approval_id"], user_email)
+                if col2.button(f"Reject", key=f"reject_{p['approval_id']}"):
+                    result = cfg.reject(p['approval_id'], user_email)
                     st.info(result)
                 st.markdown("---—")

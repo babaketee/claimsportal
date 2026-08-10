@@ -1,6 +1,6 @@
 """models.py — SQLite table definitions for the Claims Portal SoR"""
 
-All tables defined here. In production: swap SQLite for PostgreSQL.
+# All tables defined here. In production: swap SQLite for PostgreSQL.
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS claims (

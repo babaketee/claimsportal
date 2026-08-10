@@ -90,7 +90,7 @@ def _assigned_claims(role: str) -> None:
                             core_api.update_job_status(
                                 claim_ref=job["claim_ref"],
                                 new_status=sel,
-                                actor=st.session_state.get("user", expert_type),
+                                actor=st.session_state.get("user_email", expert_type),
                             )
                             st.success(f"✅ Status updated to '{sel}' for {job['claim_ref']}")
                             core_api.invalidate_claim_cache(job["claim_ref"])
@@ -175,7 +175,7 @@ def _submit_assessment_report() -> None:
         if not claim_ref or not assessment_notes or not report_file:
             st.error("Claim reference, notes, and the PDF report are required.")
         else:
-            actor = st.session_state.get("user", "assessor")
+            actor = st.session_state.get("user_email", "assessor")
             if core_api.is_configured():
                 try:
                     core_api.post_document(
@@ -218,7 +218,7 @@ def _approve_estimate() -> None:
         if not claim_ref or not garage_name:
             st.error("Claim reference and garage name are required.")
         else:
-            actor = st.session_state.get("user", "assessor")
+            actor = st.session_state.get("user_email", "assessor")
             if core_api.is_configured():
                 try:
                     core_api.log_communication(
@@ -262,7 +262,7 @@ def _submit_estimate() -> None:
         if not claim_ref or not estimate_file:
             st.error("Claim reference and the estimate PDF are required.")
         else:
-            actor = st.session_state.get("user", "garage")
+            actor = st.session_state.get("user_email", "garage")
             if core_api.is_configured():
                 try:
                     core_api.post_document(
@@ -312,7 +312,7 @@ def _request_supplementary() -> None:
         if not claim_ref or not reason:
             st.error("Claim reference and reason are required.")
         else:
-            actor = st.session_state.get("user", "garage")
+            actor = st.session_state.get("user_email", "garage")
             if core_api.is_configured():
                 try:
                     core_api.log_communication(
@@ -365,7 +365,7 @@ def _submit_invoice() -> None:
         if not all([claim_ref, invoice_number, invoice_file, kra_pin, bank_name, bank_account]):
             st.error("All required fields must be completed.")
         else:
-            actor = st.session_state.get("user", "garage")
+            actor = st.session_state.get("user_email", "garage")
             # Upload invoice PDF to core system
             if invoice_file is not None and core_api.is_configured():
                 try:

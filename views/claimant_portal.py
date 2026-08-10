@@ -264,11 +264,7 @@ def _tp_claim_form(user_email: str) -> None:
                     "ob_number": tp_ob_number,
                 }
             )
-            st.success(
-                f"Third-party claim submitted! Reference: **{claim_ref}**"
-                f"
-You will be contacted by our claims team."
-            )
+            st.success(f"Third-party claim submitted! Reference: **{claim_ref}**\nYou will be contacted by our claims team.")
             st.balloons()
         except Exception as e:
             st.error(f"Failed: {e}")
