@@ -98,7 +98,7 @@ class ClaimsEngine:
         self._init_schema()
         if hasattr(self, "_seed_demo_if_empty"):
             try:
-                self._seed_demo_if_empty()
+                pass  # seed disabled
             except Exception:
                 # Swallow any seed errors to avoid import-time crashes in environments
                 # where demo seeding was intentionally disabled or the function was renamed.
