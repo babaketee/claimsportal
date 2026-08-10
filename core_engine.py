@@ -96,7 +96,13 @@ class ClaimsEngine:
         self.db.row_factory = sqlite3.Row
         self.audit = AuditLogger(self.db)
         self._init_schema()
-        self._seed_demo_if_empty()
+        if hasattr(self, "_seed_demo_if_empty"):
+            try:
+                self._seed_demo_if_empty()
+            except Exception:
+                # Swallow any seed errors to avoid import-time crashes in environments
+                # where demo seeding was intentionally disabled or the function was renamed.
+                pass
 
     def _init_schema(self):
         self.db.executescript('''
