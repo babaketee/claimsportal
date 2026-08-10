@@ -31,8 +31,14 @@ def login_page():
         else:
             st.error("Invalid credentials.")
     with st.expander("Demo Accounts"):
+        demo_pw_keys = {}
+        try:
+            demo_pw_keys = st.secrets.get("demo_passwords", {})
+        except Exception:
+            demo_pw_keys = {}
         for email_addr, info in auth.DEMO_USERS.items():
-            st.caption(f"{info['name']} ({info['role']})")
+            has_secret = "yes" if email_addr in demo_pw_keys else "no"
+            st.caption(f"{info['name']} ({info['role']}) — secret configured: {has_secret}")
 
 def home_page():
     st.title("Claims Portal v2.0")
