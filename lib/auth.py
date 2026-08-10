@@ -3,22 +3,35 @@
 
 import streamlit as st
 
+# Passwords are read from Streamlit secrets under the `demo_passwords` mapping.
+# Example in Streamlit secrets.toml:
+# [demo_passwords]
+# "client@insure.demo" = "MySecret1"
+# "claims_officer@insure.demo" = "MySecret2"
+try:
+    DEMO_PASSWORDS = st.secrets.get("demo_passwords", {})
+except Exception:
+    DEMO_PASSWORDS = {}
+
 DEMO_USERS = {
-    "client@insure.demo":           {"name": "Assured",         "role": "client",           "password": "Demo#99"},
-    "claims_officer@insure.demo":  {"name": "Caleb Officer",   "role": "claims_officer",    "password": "Demo#99"},
-    "head_of_claims@insure.demo":  {"name": "Diana HOC",       "role": "head_of_claims",    "password": "Demo#99"},
-    "assessor@insure.demo":         {"name": "Felix Assessor",  "role": "assessor",          "password": "Demo#99"},
-    "investigator@insure.demo":    {"name": "Ivan Investigator","role": "investigator",     "password": "Demo#99"},
-    "garage@insure.demo":          {"name": "George Garage",   "role": "garage",            "password": "Demo#99"},
-    "spare_parts@insure.demo":     {"name": "Sam Spares",      "role": "spare_parts",       "password": "Demo#99"},
-    "finance@insure.demo":         {"name": "Fatima Finance",  "role": "finance",           "password": "Demo#99"},
-    "admin@insure.demo":           {"name": "Ada Admin",       "role": "admin",             "password": "Demo#99"},
-    "super@insure.demo":           {"name": "Sam Super",       "role": "super_admin",       "password": "Demo#99"},
-    "legal@insure.demo":           {"name": "Lara Legal",     "role": "legal",             "password": "Demo#99"},
-    "manager@insure.demo":         {"name": "Mary Manager",   "role": "manager",           "password": "Demo#99"},
-    "surveyor@insure.demo":        {"name": "Steve Surveyor",  "role": "surveyor",          "password": "Demo#99"},
-    "motor_fleet@insure.demo":     {"name": "Molly Fleet",    "role": "motor_fleet",       "password": "Demo#99"},
+    "client@insure.demo":           {"name": "Assured",         "role": "client"},
+    "claims_officer@insure.demo":  {"name": "Caleb Officer",   "role": "claims_officer"},
+    "head_of_claims@insure.demo":  {"name": "Diana HOC",       "role": "head_of_claims"},
+    "assessor@insure.demo":         {"name": "Felix Assessor",  "role": "assessor"},
+    "investigator@insure.demo":    {"name": "Ivan Investigator","role": "investigator"},
+    "garage@insure.demo":          {"name": "George Garage",   "role": "garage"},
+    "spare_parts@insure.demo":     {"name": "Sam Spares",      "role": "spare_parts"},
+    "finance@insure.demo":         {"name": "Fatima Finance",  "role": "finance"},
+    "admin@insure.demo":           {"name": "Ada Admin",       "role": "admin"},
+    "super@insure.demo":           {"name": "Sam Super",       "role": "super_admin"},
+    "legal@insure.demo":           {"name": "Lara Legal",     "role": "legal"},
+    "manager@insure.demo":         {"name": "Mary Manager",   "role": "manager"},
+    "surveyor@insure.demo":        {"name": "Steve Surveyor",  "role": "surveyor"},
+    "motor_fleet@insure.demo":     {"name": "Molly Fleet",    "role": "motor_fleet"},
 }
+# Attach passwords from secrets (fall back to Demo#99 to preserve current behaviour)
+for _email in list(DEMO_USERS.keys()):
+    DEMO_USERS[_email]["password"] = DEMO_PASSWORDS.get(_email, "Demo#99")
 
 ROLE_LABELS = {
     "client":"Client / Policyholder","claims_officer":"Claims Officer","head_of_claims":"Head of Claims","assessor":"Assessor","investigator":"Investigator","garage":"Garage","spare_parts":"Spare Parts","finance":"Finance","admin":"Administrator","super_admin":"Super Administrator","legal":"Legal","manager":"Manager","surveyor":"Surveyor","motor_fleet":"Motor Fleet Manager","cfo":"CFO","spare_parts":"Spare Parts Supplier","hod":"Head of Department","driver":"Driver","motor_technical":"Motor Technical","branches":"Branches","ict":"ICT",
