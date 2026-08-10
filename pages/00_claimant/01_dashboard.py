@@ -21,8 +21,24 @@ def _tat_ms(elapsed_ms: int) -> str:
     if m: parts.append(f"{m}m")
     return " ".join(parts) if parts else "0m"
 
-def render(user_email: str, user_role: str = "client") -> None:
+def render(user_email: str = None, user_role: str = "client") -> None:
     st.title("My Claims Dashboard")
+    # Ensure we have the logged-in user's email even if the navigation system
+    # didn't pass arguments — read from session_state as a fallback.
+    import streamlit as _st
+    if not user_email:
+        user_email = _st.session_state.get("user_email", "")
+    # If email still empty, try mapping the logged-in display name to a demo email
+    if not user_email:
+        try:
+            import lib.auth as _auth
+            display_name = _st.session_state.get("user_name", "")
+            for e, info in _auth.DEMO_USERS.items():
+                if info.get("name") == display_name:
+                    user_email = e
+                    break
+        except Exception:
+            pass
     engine = get_engine()
     all_claims = []
     for status in ["Draft","Reported","Triage","Investigation","Assessment","Approval",

@@ -83,7 +83,7 @@ class AuditLogger:
         rows = self.db.execute("""
             SELECT * FROM audit_log WHERE claim_ref=? ORDER BY created_at ASC
         """, (ref,)).fetchall()
-        cols = [d[0] for d in self.db.execute("PRAGMA table_info(audit_log)").fetchall()]
+        cols = [d[1] for d in self.db.execute("PRAGMA table_info(audit_log)").fetchall()]
         return [dict(zip(cols, r)) for r in rows]
     def _diff(self, a, b):
         return {k: {"from": a.get(k), "to": b.get(k)}
@@ -245,7 +245,7 @@ class ClaimsEngine:
         row = self.db.execute("SELECT * FROM claims WHERE claim_ref=?", (claim_ref,)).fetchone()
         if not row:
             raise ValueError(f"Claim {claim_ref} not found")
-        cols = [d[0] for d in self.db.execute("PRAGMA table_info(claims)").fetchall()]
+        cols = [d[1] for d in self.db.execute("PRAGMA table_info(claims)").fetchall()]
         before = dict(zip(cols, row))
         current = before["status"]
         if to_status == current:
@@ -303,12 +303,12 @@ class ClaimsEngine:
         row = self.db.execute("SELECT * FROM claims WHERE claim_ref=?", (claim_ref,)).fetchone()
         if not row:
             return None
-        cols = [d[0] for d in self.db.execute("PRAGMA table_info(claims)").fetchall()]
+        cols = [d[1] for d in self.db.execute("PRAGMA table_info(claims)").fetchall()]
         return dict(zip(cols, row))
 
     def get_claims_by_status(self, status: str) -> list[dict]:
         rows = self.db.execute("SELECT * FROM claims WHERE status=?", (status,)).fetchall()
-        cols = [d[0] for d in self.db.execute("PRAGMA table_info(claims)").fetchall()]
+        cols = [d[1] for d in self.db.execute("PRAGMA table_info(claims)").fetchall()]
         return [dict(zip(cols, r)) for r in rows]
 
     def record_reserve_movement(self, claim_ref: str, movement_type: str,

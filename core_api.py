@@ -299,6 +299,147 @@ def get_settlements_by_status(status_list: list[str]) -> pd.DataFrame:
     return df[df['status'].isin(status_list)] if status_list else df
 
 
+# --------------------------
+# Mock action handlers & stores
+# --------------------------
+
+def invalidate_claim_cache(claim_ref: str) -> bool:
+    """Backward-compat no-op used by views after pushing changes to core_api."""
+    return True
+
+
+def update_job_status(job_ref: str, status: str) -> dict:
+    conn = sqlite3.connect(_DB_PATH, timeout=10)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            claim_ref TEXT NOT NULL,
+            expert_type TEXT,
+            status TEXT,
+            assigned_at TEXT
+        )
+    ''')
+    conn.execute('UPDATE assignments SET status=? WHERE id=?', (status, job_ref))
+    conn.commit()
+    conn.close()
+    return {"success": True}
+
+
+def log_communication(claim_ref: str, sender: str, message: str) -> dict:
+    conn = sqlite3.connect(_DB_PATH, timeout=10)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS communications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            claim_ref TEXT NOT NULL,
+            sender TEXT,
+            message TEXT,
+            created_at TEXT NOT NULL
+        )
+    ''')
+    from datetime import datetime, timezone
+    conn.execute('INSERT INTO communications (claim_ref, sender, message, created_at) VALUES (?, ?, ?, ?)',
+                 (claim_ref, sender, message, datetime.now(timezone.utc).isoformat()))
+    conn.commit()
+    conn.close()
+    return {"success": True}
+
+
+def register_document(claim_ref: str, filename: str, doc_type: str) -> dict:
+    # Lightweight wrapper around post_document metadata tracking
+    conn = sqlite3.connect(_DB_PATH, timeout=10)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS documents (id INTEGER PRIMARY KEY AUTOINCREMENT, claim_ref TEXT, filename TEXT, uploaded_at TEXT, doc_type TEXT)
+    ''')
+    from datetime import datetime, timezone
+    conn.execute('INSERT INTO documents (claim_ref, filename, uploaded_at, doc_type) VALUES (?, ?, ?, ?)',
+                 (claim_ref, filename, datetime.now(timezone.utc).isoformat(), doc_type))
+    conn.commit()
+    conn.close()
+    return {"success": True}
+
+
+def update_claim_status(claim_ref: str, status: str, actor_id: str | None = None) -> dict:
+    conn = sqlite3.connect(_DB_PATH, timeout=10)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS demo_claims (id INTEGER PRIMARY KEY AUTOINCREMENT, claim_ref TEXT UNIQUE NOT NULL, policy_ref TEXT, status TEXT, created_at TEXT)
+    ''')
+    # Upsert
+    cur = conn.execute('SELECT 1 FROM demo_claims WHERE claim_ref=?', (claim_ref,))
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    if cur.fetchone():
+        conn.execute('UPDATE demo_claims SET status=?, created_at=? WHERE claim_ref=?', (status, now, claim_ref))
+    else:
+        conn.execute('INSERT INTO demo_claims (claim_ref, policy_ref, status, created_at) VALUES (?, ?, ?, ?)',
+                     (claim_ref, 'UNKNOWN', status, now))
+    conn.commit()
+    conn.close()
+    return {"success": True, "claim_ref": claim_ref, "status": status}
+
+
+def update_payment_status(claim_ref: str, payment_info: dict) -> dict:
+    conn = sqlite3.connect(_DB_PATH, timeout=10)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS payments (id INTEGER PRIMARY KEY AUTOINCREMENT, claim_ref TEXT, amount REAL, status TEXT, created_at TEXT)
+    ''')
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute('INSERT INTO payments (claim_ref, amount, status, created_at) VALUES (?, ?, ?, ?)',
+                 (claim_ref, payment_info.get('amount', 0), payment_info.get('status', 'pending'), now))
+    conn.commit()
+    conn.close()
+    return {"success": True}
+
+
+def get_settlements(claim_ref: str) -> list[dict]:
+    conn = sqlite3.connect(_DB_PATH, timeout=10)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS settlements (id INTEGER PRIMARY KEY AUTOINCREMENT, settlement_id TEXT, claim_ref TEXT, payee_name TEXT, amount REAL, net_amount REAL, status TEXT, bank_ref TEXT, created_at TEXT)
+    ''')
+    cur = conn.execute('SELECT settlement_id, claim_ref, payee_name, amount, net_amount, status, bank_ref, created_at FROM settlements WHERE claim_ref=?', (claim_ref,))
+    rows = cur.fetchall()
+    conn.close()
+    return [dict(zip(["settlement_id","claim_ref","payee_name","amount","net_amount","status","bank_ref","created_at"], r)) for r in rows]
+
+
+def mark_settlement_paid(settlement_id: str, bank_ref: str) -> dict:
+    conn = sqlite3.connect(_DB_PATH, timeout=10)
+    conn.execute('UPDATE settlements SET status=?, bank_ref=? WHERE settlement_id=?', ('paid', bank_ref, settlement_id))
+    conn.commit()
+    conn.close()
+    return {"success": True}
+
+
+def get_timeline(claim_ref: str) -> list[dict]:
+    conn = sqlite3.connect(_DB_PATH, timeout=10)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS timeline (id INTEGER PRIMARY KEY AUTOINCREMENT, claim_ref TEXT, event_type TEXT, note TEXT, created_at TEXT)
+    ''')
+    cur = conn.execute('SELECT event_type, note, created_at FROM timeline WHERE claim_ref=? ORDER BY created_at ASC', (claim_ref,))
+    rows = cur.fetchall()
+    conn.close()
+    return [dict(zip(["event_type","note","created_at"], r)) for r in rows]
+
+
+def send_message(claim_ref: str, sender: str, message: str) -> dict:
+    return log_communication(claim_ref, sender, message)
+
+
+def get_overdue_entries() -> list[dict]:
+    # Used by head_of_claims view - return empty list for now
+    return []
+
+
+def get_settlements_by_status(status_list: list[str]) -> pd.DataFrame:
+    # keep existing df-backed implementation but ensure it returns requested statuses
+    rows = [
+        {"settlement_id": "SET-20250701-001", "claim_ref": "CLM-20250701-001", "payee_name": "Jane Policyholder", "payee_type": "Client", "amount": 85000, "net_amount": 80750, "status": "approved", "recommended_by": "Officer", "recommended_at": "2025-07-10", "wht_amount": 4250},
+        {"settlement_id": "SET-20250710-002", "claim_ref": "CLM-20250710-004", "payee_name": "Westlands Auto Garage", "payee_type": "Garage", "amount": 21500, "net_amount": 20425, "status": "pending", "recommended_by": "HoC", "recommended_at": "2025-07-11", "wht_amount": 1075},
+    ]
+    df = pd.DataFrame(rows)
+    return df[df['status'].isin(status_list)] if status_list else df
+
+
 # Auto-seed demo claims on import if the demo_claims table is empty.
 def _auto_seed_demo_if_empty():
     try:
