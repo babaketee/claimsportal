@@ -228,3 +228,103 @@ def get_all_users() -> list[dict]:
         "assessor@insure.demo", "investigator@insure.demo", "garage@insure.demo",
         "spare_parts@insure.demo", "admin@insure.demo", "super@insure.demo",
     ] if get_user(email) is not None]
+
+# ---------------------------------------------------------------------------
+# Demo API helpers (implement missing endpoints used by Streamlit views)
+# ---------------------------------------------------------------------------
+import pandas as pd
+import os
+
+def is_configured() -> bool:
+    """Return True to allow views to use core_api demo endpoints instead of no-op mode."""
+    return True
+
+def get_assignments(expert_type: str | None = None) -> list[dict]:
+    """Return demo assignments filtered by expert_type."""
+    demo = [
+        {"claim_ref": "CLM-20250701-001", "claim_type": "Motor Bumper", "status": "pending", "assigned_at": "2025-07-02", "vehicle": "KBZ 000A", "estimated_cost": 85000, "expert_type": "assessor"},
+        {"claim_ref": "CLM-20250710-004", "claim_type": "Theft", "status": "accepted", "assigned_at": "2025-07-11", "vehicle": "KAZ 111B", "estimated_cost": 0, "expert_type": "investigator"},
+        {"claim_ref": "CLM-20250715-005", "claim_type": "Third Party", "status": "in_progress", "assigned_at": "2025-07-16", "vehicle": "KBC 222C", "estimated_cost": 145000, "expert_type": "garage"},
+    ]
+    if expert_type:
+        return [d for d in demo if d.get("expert_type") == expert_type]
+    return demo
+
+def get_documents(claim_ref: str) -> list[dict]:
+    """Return demo document list for a claim_ref."""
+    docs = [
+        {"claim_ref": claim_ref, "doc_type": "Police Report", "filename": "Police Abstract.pdf", "uploaded_at": "2025-07-02T10:00:00Z", "status": "Received"},
+        {"claim_ref": claim_ref, "doc_type": "Scene Photos",   "filename": "Photos.zip",          "uploaded_at": "2025-07-02T10:05:00Z", "status": "Received"},
+    ]
+    return docs
+
+def post_claim(claim: dict) -> dict:
+    """Register a claim in the demo SQLite store."""
+    try:
+        claim_ref = claim.get("claim_ref") or f"CLM-{int(pd.Timestamp.utcnow().timestamp())}"
+        notify_claim(claim_ref, claim.get("policy_ref", "UNKNOWN"), claim)
+        return {"success": True, "claim_ref": claim_ref}
+    except Exception:
+        return {"success": False}
+
+def post_document(claim_ref: str, filename: str, mime: str, data: bytes, doc_type: str) -> dict | None:
+    """Save document bytes to a local demo folder and record metadata."""
+    try:
+        storage_dir = os.path.join(os.path.dirname(__file__), 'demo_documents')
+        os.makedirs(storage_dir, exist_ok=True)
+        path = os.path.join(storage_dir, f"{claim_ref}__{filename}")
+        with open(path, 'wb') as fh:
+            fh.write(data)
+        # record metadata to sqlite
+        try:
+            from datetime import datetime, timezone
+            conn = sqlite3.connect(_DB_PATH, timeout=10)
+            conn.execute('''CREATE TABLE IF NOT EXISTS documents (claim_ref TEXT, filename TEXT, uploaded_at TEXT, doc_type TEXT)''')
+            conn.execute('INSERT INTO documents (claim_ref, filename, uploaded_at, doc_type) VALUES (?, ?, ?, ?)', (claim_ref, filename, datetime.now(timezone.utc).isoformat(), doc_type))
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
+        return {"saved": True, "path": path}
+    except Exception:
+        return None
+
+def get_settlements_by_status(status_list: list[str]) -> pd.DataFrame:
+    """Return demo settlements as a pandas DataFrame (used by finance views)."""
+    rows = [
+        {"settlement_id": "SET-20250701-001", "claim_ref": "CLM-20250701-001", "payee_name": "Jane Policyholder", "payee_type": "Client", "amount": 85000, "net_amount": 80750, "status": "approved", "recommended_by": "Officer", "recommended_at": "2025-07-10", "wht_amount": 4250},
+        {"settlement_id": "SET-20250710-002", "claim_ref": "CLM-20250710-004", "payee_name": "Westlands Auto Garage", "payee_type": "Garage", "amount": 21500, "net_amount": 20425, "status": "pending", "recommended_by": "HoC", "recommended_at": "2025-07-11", "wht_amount": 1075},
+    ]
+    df = pd.DataFrame(rows)
+    return df[df['status'].isin(status_list)] if status_list else df
+
+
+# Auto-seed demo claims on import if the demo_claims table is empty.
+def _auto_seed_demo_if_empty():
+    try:
+        conn = sqlite3.connect(_DB_PATH, timeout=10)
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS demo_claims (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                claim_ref TEXT UNIQUE NOT NULL,
+                policy_ref TEXT,
+                status TEXT,
+                created_at TEXT
+            )
+        ''')
+        cur = conn.execute('SELECT count(1) FROM demo_claims')
+        cnt = cur.fetchone()[0]
+        if not cnt:
+            now = datetime.now(timezone.utc).isoformat()
+            demo_rows = [
+                ("CLM-20250701-001", "POL-MOT-2026-001", "notified", now),
+                ("CLM-20250710-004", "POL-MOT-2026-002", "notified", now),
+                ("CLM-20250715-005", "POL-MOT-2026-003", "in_progress", now),
+            ]
+            conn.executemany('INSERT OR IGNORE INTO demo_claims (claim_ref, policy_ref, status, created_at) VALUES (?, ?, ?, ?)', demo_rows)
+            conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+_auto_seed_demo_if_empty()
