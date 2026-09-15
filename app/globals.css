@@ -1,0 +1,56 @@
+@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background-color: #f4f7f6;
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl2 border border-black/5 bg-white shadow-card;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-brand-red text-white hover:bg-brand-red-dark;
+  }
+  .btn-secondary {
+    @apply btn bg-brand-green text-white hover:bg-brand-green-dark;
+  }
+  .btn-ghost {
+    @apply btn border border-black/10 bg-white text-brand-ink hover:bg-black/[0.03];
+  }
+
+  .field-label {
+    @apply mb-1 block text-xs font-semibold uppercase tracking-wide text-black/50;
+  }
+  .field-input {
+    @apply w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm text-brand-ink placeholder:text-black/30 focus:border-brand-green focus:outline-none focus:ring-2 focus:ring-brand-green/20;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(15, 79, 72, 0.25);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
