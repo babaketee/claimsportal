@@ -348,9 +348,11 @@ section[data-testid="stSidebar"] .stRadio [data-baseweb="radio"] input[type="rad
   color: var(--da-white) !important;
 }}
 
-/* ---- Sidebar accent border ---- */
+/* ---- Sidebar accent border: gradient glow ---- */
 section[data-testid="stSidebar"] {{
+  border-right: 3px solid;
   border-right: 3px solid var(--da-green);
+  box-shadow: 3px 0 8px rgba(15, 79, 56, 0.15);
 }}
 
 /* ---- Primary action buttons — Uhuru Red ---- */
@@ -1201,7 +1203,8 @@ section[data-testid="stSidebar"] .stRadio [data-baseweb="radio"] label:hover {{
   background: linear-gradient(90deg, {GREEN}, {RED}, {BLUE});
 }}
 
-"""
+</style>"""
+
 
 
 # ---------------------------------------------------------------------------
