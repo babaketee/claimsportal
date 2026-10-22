@@ -262,8 +262,11 @@ def render() -> None:
 # ---------------------------------------------------------------------------
 
 def _fnol_form() -> None:
-    st.subheader("First Notification of Loss (FNOL)")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📞 First Notification of Loss (FNOL)")
+    st.caption("Report a new claim — all fields marked * are mandatory.")
     st.info("Complete all sections. Fields marked * are mandatory.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     with st.form("fnol_form"):
         st.markdown("#### 1. Policyholder Verification")
@@ -483,7 +486,10 @@ def _contact_dialog(expert: dict, claim_ref: str, user_email: str) -> None:
 
 def _claim_tracker(user_email: str) -> None:
     """Track submitted claims for the logged-in client. Scoped to client's own claims only."""
-    st.subheader("Track Your Claims")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("🔎 Track Your Claims")
+    st.caption("Search and view the status of your submitted claims.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # Demo claims — in production these come from core API filtered by client identity
     # Only include claims belonging to this logged-in client (no IDOR)
@@ -526,8 +532,11 @@ def _claim_tracker(user_email: str) -> None:
 
 
 def _my_documents() -> None:
-    st.subheader("My Documents")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📄 My Documents")
+    st.caption("Documents submitted with your claim. Enter a claim reference to view them.")
     st.info("Documents submitted with your claim. Enter a claim reference to view them.")
+    st.markdown('</div>', unsafe_allow_html=True)
     claim_ref_input = st.text_input(
         "Claim Reference", placeholder="e.g. CLM-20250715123456", key="doc_claim_ref_input",
     )

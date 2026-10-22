@@ -115,7 +115,10 @@ def _process_payment(settlement_id: str, claim_ref: str) -> None:
 
 def _payment_dashboard() -> None:
     """Show all settlements pending or approved for payment."""
-    st.subheader("Payment Dashboard")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("💳 Payment Dashboard")
+    st.caption("Track outgoing payments and pending authorisations.")
+    st.markdown('</div>', unsafe_allow_html=True)
     
     # Show settlements needing payment (approved status)
     conn = core_api._get_conn()
@@ -177,7 +180,10 @@ def _update_payment_status() -> None:
 
 
 def _reconciliation() -> None:
-    st.subheader("Monthly Reconciliation")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📊 Monthly Reconciliation")
+    st.caption("Reconcile claims payments with bank statements and ledger entries.")
+    st.markdown('</div>', unsafe_allow_html=True)
     c1, c2 = st.columns([2, 1])
     c1.selectbox("Period", ["July 2025","June 2025","May 2025"])
     c2.button("Export to Excel", use_container_width=True)
@@ -261,7 +267,10 @@ def _reserve_analysis() -> None:
 
 
 def _financial_dashboard() -> None:
-    st.subheader("Financial Dashboard — Claims Costs")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📈 Financial Dashboard — Claims Costs")
+    st.caption("Claims expense analysis across underwriting years and claim types.")
+    st.markdown('</div>', unsafe_allow_html=True)
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Total Reserves (KES M)","48.6","+2.1 MoM"); c2.metric("YTD Claims Paid (KES M)","142.3","+18% vs LY")
     c3.metric("Loss Ratio (YTD)","68%","+3%"); c4.metric("Recoveries / Salvage (KES M)","4.2","+0.5")
@@ -311,7 +320,10 @@ def _high_value_approvals() -> None:
 
 
 def _financial_reports() -> None:
-    st.subheader("Financial Reports")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📑 Financial Reports")
+    st.caption("Export regulatory and management report packs.")
+    st.markdown('</div>', unsafe_allow_html=True)
     c1, c2 = st.columns(2)
     report = c1.selectbox("Report Type", [
         "Monthly Claims Cost Summary","YTD Loss Ratio by Line","Reserve Adequacy Report",

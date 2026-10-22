@@ -58,8 +58,11 @@ def _fetch_disputes(stage_f: str, urgency_f: str, search: str) -> list[dict]:
 
 
 def _dispute_register() -> None:
-    st.subheader("Dispute Register")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📄 Dispute Register")
+    st.caption("SQLite-backed dispute tracking — migrated to SQLite backend.")
     st.info("Dispute register is being migrated to SQLite.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     c1, c2, c3 = st.columns(3)
     stage_f    = c1.selectbox("Stage",   ["All","Repudiation Appeal","Pre-Litigation","Litigation","Consent Order"])
@@ -101,11 +104,14 @@ def _dispute_register() -> None:
 # ---------------------------------------------------------------------------
 
 def _repudiation_appeals() -> None:
-    st.subheader("Repudiation Appeals")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("🔔 Repudiation Appeals")
+    st.caption("Review grounds, investigation reports, and policy wording before recommending position.")
     st.info(
         "When a client disputes a repudiation, the Legal Officer reviews the grounds, "
         "the investigation report, and the policy wording before recommending a position."
     )
+    st.markdown('</div>', unsafe_allow_html=True)
 
     appeals = [
         {"Ref": "CLM-20250701044512", "Client": "Mercy Holdings Ltd.", "Grounds": "Policy Lapse dispute — alleges payment was made",     "Received": "2025-07-10", "Status": "Under Review"},
@@ -144,8 +150,11 @@ def _repudiation_appeals() -> None:
 # ---------------------------------------------------------------------------
 
 def _litigation_tracker() -> None:
-    st.subheader("Litigation Tracker")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("⚖️ Litigation Tracker")
+    st.caption("Track court proceedings, consent orders, and judgment amounts.")
     st.warning("Any judgment or consent order amount must be routed to Finance Head for payment approval.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     cases = [
         {"Ref": "CLM-20250712055431", "Client / Plaintiff": "Peter Ochieng",  "Court": "Milimani Commercial Court", "Case No.": "ELC/123/2025", "Status": "Active",       "Next Hearing": "2025-08-05", "Claim Amount (KES)": "1,200,000", "External Counsel": "Kariuki & Co."},
@@ -192,7 +201,10 @@ def _litigation_tracker() -> None:
 # ---------------------------------------------------------------------------
 
 def _demand_letters_ots() -> None:
-    st.subheader("Demand Letters & Offers to Settle (OTS)")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📧 Demand Letters & Offers to Settle (OTS)")
+    st.caption("Track demand letter issuance and settlement offer negotiation timelines.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
 
@@ -262,11 +274,14 @@ def _demand_letters_ots() -> None:
 # ---------------------------------------------------------------------------
 
 def _recovery_subrogation() -> None:
-    st.subheader("Recovery & Subrogation Actions")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("💰 Recovery & Subrogation Actions")
+    st.caption("Pursue recovery from liable third parties and salvage proceeds.")
     st.info(
         "After settling a claim, pursue recovery from liable third parties or salvage proceeds. "
         "All recoveries must be credited back to the Finance team."
     )
+    st.markdown('</div>', unsafe_allow_html=True)
 
     recoveries = [
         {"Ref": "CLM-20250712055431", "Type": "Third-Party Recovery",  "Third Party": "Nairobi Bus Services Ltd.", "Claim Paid (KES)": "1,200,000", "Recovery Target (KES)": "800,000", "Status": "Demand Issued",    "Recovery (KES)": "0"},
@@ -309,7 +324,10 @@ def _recovery_subrogation() -> None:
 # ---------------------------------------------------------------------------
 
 def _ira_complaints() -> None:
-    st.subheader("IRA & Ombudsman Complaints")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("🏛️ IRA & Ombudsman Complaints")
+    st.caption("Regulatory complaint tracking and response management.")
+    st.markdown('</div>', unsafe_allow_html=True)
     st.warning(
         "Complaints filed with the Insurance Regulatory Authority (IRA) or the Insurance Ombudsman "
         "carry a statutory response deadline. Breaching it attracts regulatory penalties."
@@ -367,11 +385,14 @@ def _ira_complaints() -> None:
 
 def _repudiation_workflow() -> None:
     """Full repudiation lifecycle: log, demand letter, litigation flag, timeline."""
-    st.subheader("Repudiation Workflow")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📋 Repudiation Workflow")
+    st.caption("End-to-end repudiation decision lifecycle tracking.")
     st.info(
         "Track the full repudiation lifecycle — from initial decision through demand letters, "
         "litigation status changes, and case timelines — using core_api for all communications and documents."
     )
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # --- In-memory store (wire to core_api.communications + SQLite) ------------
     if "repudiation_log" not in st.session_state:

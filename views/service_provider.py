@@ -57,7 +57,10 @@ def render(role: str) -> None:
 def _assigned_claims(role: str) -> None:
     """Show claims assigned to this provider, filtered by expert type."""
     expert_type = role
-    st.subheader("My Assigned Jobs")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📂 My Assigned Jobs")
+    st.caption("Claims assigned to you with status and priority levels.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # Attempt real data fetch via core_api, fall back to demo data
     demo_jobs = [
@@ -124,7 +127,10 @@ def _assigned_claims(role: str) -> None:
 
 def _submit_quote(claim_ref: str, provider_email: str) -> None:
     """Submit a quote for a job (used by assessor/garage/investigator)."""
-    st.subheader("Submit Quote")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📝 Submit Quote")
+    st.caption("Provide labour and parts cost estimate for the assigned claim.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     with st.form(key=f"quote_form_{claim_ref}"):
         labour = st.number_input("Labour Cost (KES)", min_value=0, value=0, step=500, key=f"lab_{claim_ref}")
@@ -175,7 +181,10 @@ def _submit_quote(claim_ref: str, provider_email: str) -> None:
 # ---------------------------------------------------------------------------
 
 def _submit_assessment_report() -> None:
-    st.subheader("Submit Assessment Report")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📋 Submit Assessment Report")
+    st.caption("Detailed damage assessment and cost breakdown for claim adjudication.")
+    st.markdown('</div>', unsafe_allow_html=True)
     with st.form("assessment_report"):
         c1, c2 = st.columns(2)
         claim_ref        = c1.text_input("Claim Reference Number *")
@@ -225,8 +234,11 @@ def _submit_assessment_report() -> None:
 # ---------------------------------------------------------------------------
 
 def _approve_estimate() -> None:
-    st.subheader("Approve / Reject Garage Estimate")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("✅ Approve / Reject Garage Estimate")
+    st.caption("Review garage estimate and provide approval decision.")
     st.info("Review the garage estimate and provide your decision before it is routed to accounts payable.")
+    st.markdown('</div>', unsafe_allow_html=True)
     with st.form("approve_estimate"):
         c1, c2 = st.columns(2)
         claim_ref       = c1.text_input("Claim Reference Number *")
@@ -269,8 +281,11 @@ def _approve_estimate() -> None:
 # ---------------------------------------------------------------------------
 
 def _submit_estimate() -> None:
-    st.subheader("Submit Repair Estimate")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("🔧 Submit Repair Estimate")
+    st.caption("Provide repair cost estimate before work begins.")
     st.info("Your estimate will be reviewed and approved by an assessor before repair work begins.")
+    st.markdown('</div>', unsafe_allow_html=True)
     with st.form("garage_estimate"):
         claim_ref     = st.text_input("Claim Reference Number *")
         c1, c2, c3   = st.columns(3)
@@ -318,7 +333,10 @@ def _submit_estimate() -> None:
 # ---------------------------------------------------------------------------
 
 def _request_supplementary() -> None:
-    st.subheader("Supplementary Approval Request")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📋 Supplementary Approval Request")
+    st.caption("Request additional approval for costs exceeding original estimate.")
+    st.markdown('</div>', unsafe_allow_html=True)
     with st.form("supplementary"):
         c1, c2 = st.columns(2)
         claim_ref         = c1.text_input("Claim Reference Number *")
@@ -364,11 +382,14 @@ def _request_supplementary() -> None:
 # ---------------------------------------------------------------------------
 
 def _submit_invoice() -> None:
-    st.subheader("Submit Final Invoice")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("💸 Submit Final Invoice")
+    st.caption("Submit final invoice for payment after work completion and approval.")
     st.warning(
         "⚠️ Invoices require prior assessor sign-off. "
         "Submission without an approved estimate will be rejected."
     )
+    st.markdown('</div>', unsafe_allow_html=True)
     with st.form("invoice"):
         c1, c2 = st.columns(2)
         claim_ref      = c1.text_input("Claim Reference Number *")
@@ -443,7 +464,10 @@ def _submit_invoice() -> None:
 # ---------------------------------------------------------------------------
 
 def _payment_status(role: str) -> None:
-    st.subheader("Payment Status")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📄 Payment Status")
+    st.caption("Track invoice submission and payment status.")
+    st.markdown('</div>', unsafe_allow_html=True)
     st.info("Track the payment status for your submitted invoices and service fees.")
 
     # TODO: Query Delta table filtered to this provider's ID
@@ -598,11 +622,14 @@ def _payment_status(role: str) -> None:
 # ---------------------------------------------------------------------------
 
 def _submit_investigation_report() -> None:
-    st.subheader("Submit Investigation Report")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("🕵️ Submit Investigation Report")
+    st.caption("Investigation findings and recommendations for claim resolution.")
     st.info(
         "This portal contains private claim details. "
         "Handle all information in accordance with DPA 2019 and your engagement mandate."
     )
+    st.markdown('</div>', unsafe_allow_html=True)
     with st.form("investigation"):
         c1, c2 = st.columns(2)
         claim_ref   = c1.text_input("Claim Reference Number *")

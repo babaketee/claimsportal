@@ -116,8 +116,10 @@ def render() -> None:
 # ---------------------------------------------------------------------------
 
 def _analytics() -> None:
-    st.subheader("Portfolio Analytics")
-    st.caption("Analytics via SQLite \u00b7 60-second cache.")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📈 Portfolio Analytics")
+    st.caption("Analytics via SQLite · 60-second cache.")
+    st.markdown('</div><div class="da-accent-line"></div>', unsafe_allow_html=True)
     render_analytics(show_refresh=False)
 
 
@@ -140,8 +142,10 @@ def _overview() -> None:
 # ---------------------------------------------------------------------------
 
 def _all_claims() -> None:
-    st.subheader("All Claims")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📋 All Claims")
     st.info("Refactoring to SQLite in progress.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------

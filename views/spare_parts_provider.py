@@ -229,12 +229,15 @@ def render() -> None:
 # ---------------------------------------------------------------------------
 
 def _open_broadcasts() -> None:
-    st.subheader("Open RFQ Broadcasts")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📢 Open RFQ Broadcasts")
+    st.caption("Requests forwarded from claims handlers — submit competitive bids.")
     st.info(
         "These requests have been broadcast to **all registered spare parts providers**. "
         "Submit your most competitive bid via the **Submit Bid** tab before the Required By date. "
         "Bids are evaluated on price and provider rating."
     )
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # TODO: Query Delta table for open RFQs
     #   spark.sql("""
@@ -266,11 +269,14 @@ def _open_broadcasts() -> None:
 # ---------------------------------------------------------------------------
 
 def _submit_bid() -> None:
-    st.subheader("Submit a Bid")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("💎 Submit a Bid")
+    st.caption("Submit your best bid — evaluated on price and provider rating.")
     st.info(
         "Bids are evaluated on **unit price** and **provider rating** (delivery track record, quality). "
         "The winning provider is notified automatically once the evaluation is complete."
     )
+    st.markdown('</div>', unsafe_allow_html=True)
 
     open_rfq_refs = [r["RFQ Ref"] for r in BROADCASTS if r["Status"] == "Open"]
 
@@ -365,8 +371,10 @@ def _store_bid_locally(bid_ref: str, rfq_ref: str, company_name: str, brand: str
 # ---------------------------------------------------------------------------
 
 def _my_bids() -> None:
-    st.subheader("My Bids")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("🛠️ My Bids")
     st.caption("Bids are evaluated on price and provider rating. Won bids trigger an order and payment workflow.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # TODO: Query claims.rfq_bids WHERE provider_id = current_user_id
 
@@ -397,12 +405,15 @@ def _my_bids() -> None:
 # ---------------------------------------------------------------------------
 
 def _active_orders() -> None:
-    st.subheader("Active Orders")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📦 Active Orders")
+    st.caption("Orders awaiting delivery and invoicing.")
     st.info(
         "Orders are created automatically when your bid is awarded. "
         "Deliver the parts and update the delivery status below. "
         "You can then submit your invoice from the **Submit Invoice** tab."
     )
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # TODO: Query claims.spare_part_orders WHERE provider_id = current_user_id
 
@@ -439,12 +450,15 @@ def _active_orders() -> None:
 # ---------------------------------------------------------------------------
 
 def _submit_invoice() -> None:
-    st.subheader("Submit Invoice")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("🧾 Submit Invoice")
+    st.caption("Submit invoice after parts delivered and accepted.")
     st.info(
         "Submit your invoice after parts have been delivered and accepted. "
         "Payment may be made directly by the **Insurance Company** or by the **Garage**, "
         "depending on what was agreed at order creation."
     )
+    st.markdown('</div>', unsafe_allow_html=True)
 
     order_refs = [o["Order Ref"] for o in ACTIVE_ORDERS]
 
@@ -498,11 +512,14 @@ def _submit_invoice() -> None:
 # ---------------------------------------------------------------------------
 
 def _payment_status() -> None:
-    st.subheader("Payment Status")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("💳 Payment Status")
+    st.caption("Track payment status for submitted invoices.")
     st.info(
         "Track payment status for your submitted invoices. "
         "Payments may originate from the Insurance Company or directly from the Garage."
     )
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # TODO: Query claims.sp_payments WHERE provider_id = current_user_id
 
@@ -532,8 +549,10 @@ def _payment_status() -> None:
 # ---------------------------------------------------------------------------
 
 def _notifications() -> None:
-    st.subheader("Notifications")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("🔔 Notifications")
     st.caption("Broadcasts, bid results, and order confirmations appear here in real time.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # TODO: Query claims.notifications WHERE recipient_id = current_user_id ORDER BY notification_date DESC
 
@@ -569,7 +588,10 @@ def _notifications() -> None:
 
 def _rfq_bids() -> None:
     """Show open RFQs and submit bids, stored via core_api.log_communication."""
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
     st.subheader("🛒 Spare Parts RFQ Bids")
+    st.caption("Browse open RFQs and submit your best bid.")
+    st.markdown('</div>', unsafe_allow_html=True)
     st.info(
         "Browse **open RFQs** below and submit your best bid. "
         "All bids are stored via **core_api.log_communication(channel='rfq_bid')**. "

@@ -64,7 +64,9 @@ def render() -> None:
 
 
 def _my_claims() -> None:
-    st.subheader("My Assigned Claims")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📂 My Assigned Claims")
+    st.caption("Claims assigned to you filtered by status and urgency.")
     c1, c2, c3 = st.columns(3)
     c1.selectbox("Status", ["All", "New", "Under Review", "Awaiting Report",
                              "Under Assessment", "Pending Settlement",
@@ -170,7 +172,10 @@ def _assign_experts(claim_ref: str) -> None:
 
 def _set_reserve(claim_ref: str) -> None:
     """Set or supplement a claim reserve."""
-    st.subheader("Reserve Management")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("💰 Reserve Management")
+    st.caption("Set individual case reserves and total reserves with authority checks.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     reserves_df = core_api.get_reserves(claim_ref)
     total_reserves = core_api.get_total_reserves(claim_ref) if not reserves_df.empty else 0
@@ -371,7 +376,10 @@ def _authorise_service_payment(claim_ref: str) -> None:
 
 def _correspondence(claim_ref: str) -> None:
     """Log communications and manage diary entries."""
-    st.subheader("Correspondence & Diary")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📧 Correspondence & Diary")
+    st.caption("Internal notes, external communications, and diary scheduling.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     tab_comm, tab_diary = st.tabs(["📞 Communications Log", "📋 Diary"])
 
@@ -695,7 +703,10 @@ def _score_bids(bids: list) -> list:
 # ---------------------------------------------------------------------------
 
 def _bid_comparison() -> None:
-    st.subheader("Spare Parts Bid Comparison")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("🛒 Spare Parts Bid Comparison")
+    st.caption("Compare supplier bids and select the best option.")
+    st.markdown('</div>', unsafe_allow_html=True)
     st.info(
         "Review all bids for an open RFQ. "
         "Each bid is scored automatically: **price (60 %)** + **provider rating (40 %)**. "

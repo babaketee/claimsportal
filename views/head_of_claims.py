@@ -97,7 +97,10 @@ def render() -> None:
 
 
 def _dashboard() -> None:
-    st.subheader("Claims Overview")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📊 Claims Overview")
+    st.caption("Portfolio-wide KPI metrics and trends.")
+    st.markdown('</div>', unsafe_allow_html=True)
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Open Claims",             "142", "+8 today")
     c2.metric("Pending HoC Approval",     "7",   "+2")
@@ -149,7 +152,10 @@ def _pending_approvals() -> None:
 
 
 def _all_claims() -> None:
-    st.subheader("All Claims")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📋 All Claims")
+    st.caption("Complete claims register with status and reserve information.")
+    st.markdown('</div>', unsafe_allow_html=True)
     c1, c2, c3, c4 = st.columns(4)
     c1.selectbox("Status", ["All","Open","Pending Settlement","Settled","Repudiated","Litigation"])
     c2.selectbox("Officer", ["All","S. Karimi","T. Mutua","J. Njeru"])
@@ -165,8 +171,11 @@ def _all_claims() -> None:
 
 
 def _repudiation() -> None:
-    st.subheader("Repudiation / Claim Rejection")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("🚫 Repudiation / Claim Rejection")
+    st.caption("Irreversible repudiation decisions requiring legal sign-off.")
     st.error("Repudiation is irreversible. Ensure all investigation findings, policy conditions, and legal sign-off are documented before proceeding.")
+    st.markdown('</div>', unsafe_allow_html=True)
     with st.form("repudiation"):
         c1, c2 = st.columns(2)
         claim_ref      = c1.text_input("Claim Reference *")
@@ -191,7 +200,10 @@ def _repudiation() -> None:
 
 
 def _performance() -> None:
-    st.subheader("Claims Officers Performance — 30-Day Rolling")
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📈 Performance")
+    st.caption("Claims officers — 30-day rolling performance metrics.")
+    st.markdown('</div>', unsafe_allow_html=True)
     st.dataframe([
         {"Officer":"S. Karimi","Open":52,"Settled":31,"Avg Days":16,"Within SLA":"92%","Reserve Accuracy":"94%"},
         {"Officer":"T. Mutua", "Open":45,"Settled":28,"Avg Days":19,"Within SLA":"87%","Reserve Accuracy":"89%"},
