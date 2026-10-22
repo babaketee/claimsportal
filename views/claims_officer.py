@@ -5,30 +5,62 @@ import streamlit as st
 import pandas as pd
 
 from core_api import core_api
+from views.analytics_charts import render_analytics, render_advanced_analytics
 
 OFFICER_AUTHORITY_LIMIT = 500_000  # KES — above this needs Head of Claims sign-off
 
 
 def render() -> None:
-    st.title("📋 Claims Officer Portal")
+    st.markdown("""
+    <div class="da-gradient-header">
+      <h1>📋 Claims Officer Portal</h1>
+      <p style="color: rgba(255,255,255,0.90); margin: 4px 0 0; font-size: 0.95rem;">
+        Kenya Insurance Claims Management System · Authority limit: KES 500,000
+      </p>
+    </div>
+    <div class="da-accent-line"></div>
+    """, unsafe_allow_html=True)
+
+    # --- Claim selector (needed by most tabs) ---
+    claims_list = [
+        {"ref": "CLM-20250715123456", "client": "John Mwangi"},
+        {"ref": "CLM-20250714098765", "client": "Amina Wanjiru"},
+        {"ref": "CLM-20250712055431", "client": "Peter Ochieng"},
+        {"ref": "CLM-20250710033210", "client": "Grace Njoki"},
+    ]
+    claim_ref = st.selectbox(
+        "Select Claim for Processing",
+        options=[c["ref"] for c in claims_list],
+        format_func=lambda r: f"{r} — {[c['client'] for c in claims_list if c['ref'] == r][0]}",
+        key="officer_claim_select",
+    )
+    st.caption(f"Selected claim: {claim_ref}")
+
     tabs = st.tabs([
-        "📥 My Claims", "👥 Assign Experts", "💼 Reserve",
-        "✅ Settlement", "💸 Authorise Payment", "📨 Correspondence", "🏷️ Bid Comparison"
+        "📋 My Claims", "👥 Assign Experts", "💼 Reserve",
+        "✅ Settlement", "💸 Authorise Payment", "📨 Correspondence",
+        "🏷️ Bid Comparison", "⚠️ Disputes", "⏱ SLA Monitor", "📊 Analytics"
     ])
     with tabs[0]:
         _my_claims()
     with tabs[1]:
-        _assign_experts_tab()
+        _assign_experts(claim_ref)
     with tabs[2]:
-        _set_reserve()
+        _set_reserve(claim_ref)
     with tabs[3]:
-        _recommend_settlement()
+        _recommend_settlement(claim_ref)
     with tabs[4]:
-        _authorise_service_payment()
+        _authorise_service_payment(claim_ref)
     with tabs[5]:
-        _correspondence()
+        _correspondence(claim_ref)
     with tabs[6]:
         _bid_comparison()
+    with tabs[7]:
+        _dispute_management()
+    with tabs[8]:
+        _sla_monitor()
+    with tabs[9]:
+        _analytics_dashboard()
 
 
 def _my_claims() -> None:
@@ -430,6 +462,210 @@ def _correspondence(claim_ref: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Dispute Management
+# ---------------------------------------------------------------------------
+
+def _dispute_management() -> None:
+    """Manage claims under dispute — view, create, and track resolution."""
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("⚠️ Dispute Management")
+    st.caption("Claims in dispute, repudiation appeals, and litigation tracking.")
+    st.markdown('</div><div class="da-accent-line"></div>', unsafe_allow_html=True)
+
+    # Filters
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        stage_filter = st.selectbox(
+            "Stage", ["All", "Repudiation Appeal", "Litigation", "Arbitration", "Resolved"],
+            key="dispute_stage_filter"
+        )
+    with c2:
+        urgency_filter = st.selectbox(
+            "Urgency", ["All", "high", "normal", "low"],
+            key="dispute_urgency_filter"
+        )
+    with c3:
+        search = st.text_input("Search Ref / Client", key="dispute_search")
+
+    try:
+        disputes = core_api.get_disputes(
+            stage_filter=stage_filter,
+            urgency_filter=urgency_filter,
+            search=search,
+        )
+    except Exception as e:
+        st.error(f"Error loading disputes: {e}")
+        disputes = []
+
+    # Summary metrics
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Active Disputes", len(disputes))
+    col2.metric("High Urgency", sum(1 for d in disputes if d.get("urgency") == "high"))
+    col3.metric("Total Claim Value (KES M)", f"{sum(d.get('claim_amount', 0) or 0 for d in disputes) / 1_000_000:.1f}")
+
+    if not disputes:
+        st.info("No disputes matching the current filters.")
+    else:
+        df = pd.DataFrame(disputes)
+        if not df.empty:
+            display_cols = ["dispute_id", "claim_ref", "stage", "urgency", "claim_amount", "client_name", "status", "created_at"]
+            display_cols = [c for c in display_cols if c in df.columns]
+            display_df = df[display_cols].copy()
+            if "claim_amount" in display_df.columns:
+                display_df["claim_amount"] = display_df["claim_amount"].apply(lambda x: f"KES {x:,.0f}" if pd.notna(x) and x else "—")
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+    # Add new dispute
+    with st.expander("➕ Register New Dispute"):
+        with st.form("new_dispute_form"):
+            claim_ref = st.text_input("Claim Reference *")
+            client_name = st.text_input("Client Name *")
+            stage = st.selectbox("Stage *", ["Repudiation Appeal", "Litigation", "Arbitration"])
+            urgency = st.selectbox("Urgency *", ["high", "normal", "low"])
+            claim_amount = st.number_input("Claim Amount (KES)", min_value=0.0, format="%.2f")
+            advocate = st.text_input("Advocate / Legal Representative")
+            submitted = st.form_submit_button("Register Dispute")
+        if submitted:
+            if not claim_ref or not client_name:
+                st.error("Claim reference and client name are required.")
+            else:
+                try:
+                    dispute_id = core_api.add_dispute(
+                        claim_ref=claim_ref,
+                        client_name=client_name,
+                        stage=stage,
+                        urgency=urgency,
+                        claim_amount=float(claim_amount),
+                        advocate=advocate,
+                    )
+                    if dispute_id:
+                        st.success(f"Dispute registered — {dispute_id}")
+                        st.balloons()
+                    else:
+                        st.error("Failed to register dispute.")
+                except Exception as e:
+                    st.error(f"Error: {e}")
+
+
+# ---------------------------------------------------------------------------
+# SLA Monitoring
+# ---------------------------------------------------------------------------
+
+def _sla_monitor() -> None:
+    """Monitor SLA compliance across all active claims."""
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("⏱ SLA Monitor")
+    st.caption("Acknowledgement SLA: 3 days | Settlement SLA: 30 days (per Insurance Act Cap 111)")
+    st.markdown('</div><div class="da-accent-line"></div>', unsafe_allow_html=True)
+
+    # KPI cards
+    claims = core_api.get_claims()
+    if not claims:
+        st.info("No claims found.")
+        return
+
+    ack_overdue = 0
+    settle_overdue = 0
+    ack_at_risk = 0
+    settle_at_risk = 0
+
+    for claim in claims:
+        sla = core_api.get_sla_status(claim["claim_ref"], claim.get("submitted_at", ""))
+        if sla.get("acknowledged_overdue"):
+            ack_overdue += 1
+        elif sla.get("days_to_ack", 0) <= 3:
+            ack_at_risk += 1
+        if sla.get("settlement_overdue"):
+            settle_overdue += 1
+        elif sla.get("days_to_settle", 0) <= 7:
+            settle_at_risk += 1
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Ack SLA Overdue", ack_overdue, delta_color="inverse")
+    c2.metric("Ack At Risk (<=3d)", ack_at_risk, delta_color="inverse")
+    c3.metric("Settle SLA Overdue", settle_overdue, delta_color="inverse")
+    c4.metric("Settle At Risk (<=7d)", settle_at_risk, delta_color="inverse")
+
+    st.divider()
+
+    # Detailed table
+    st.markdown("**Claims by SLA Status**")
+    rows = []
+    for claim in claims:
+        sla = core_api.get_sla_status(claim["claim_ref"], claim.get("submitted_at", ""))
+        ack_status = "🔴 Overdue" if sla.get("acknowledged_overdue") else (
+            "🟡 At risk" if sla.get("days_to_ack", 0) <= 3 else "🟢 OK"
+        )
+        settle_status = "🔴 Overdue" if sla.get("settlement_overdue") else (
+            "🟡 At risk" if sla.get("days_to_settle", 0) <= 7 else "🟢 OK"
+        )
+        days_open = (datetime.datetime.now() - datetime.datetime.fromisoformat(claim.get("submitted_at", datetime.datetime.now().isoformat()[:19]))).days if claim.get("submitted_at") else 0
+        rows.append({
+            "Ref": claim["claim_ref"],
+            "Status": claim.get("status", ""),
+            "Days Open": days_open,
+            "Ack SLA": ack_status,
+            "Settle SLA": settle_status,
+        })
+
+    if rows:
+        st.dataframe(rows, use_container_width=True, hide_index=True)
+
+    # SLA settings
+    with st.expander("⚙️ SLA Configuration"):
+        st.json({
+            "Acknowledgement SLA": "14 days (Insurance Act Cap 111, Section 75)",
+            "Settlement SLA": "30 days (Insurance Act Cap 111, Section 76)",
+            "At-risk thresholds": "Acknowledgement <= 3 days, Settlement <= 7 days",
+            "Reinsurance threshold": "KES 2,000,000 (requires Finance Head co-approval)",
+            "Officer auto-approve limit": "KES 500,000",
+        })
+
+
+# ---------------------------------------------------------------------------
+# Analytics Dashboard
+# ---------------------------------------------------------------------------
+
+def _analytics_dashboard() -> None:
+    """Dashboard with KPI cards and charts from the analytics module."""
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📊 Analytics Dashboard")
+    st.caption("Live metrics and trend analysis from claim data.")
+    st.markdown('</div><div class="da-accent-line"></div>', unsafe_allow_html=True)
+
+    # KPI cards
+    claims = core_api.get_claims()
+    if not claims:
+        st.info("No claims data available.")
+        return
+
+    total_claims = len(claims)
+    total_reserve = sum(
+        core_api.get_total_reserves(c["claim_ref"]) or 0 for c in claims
+    )
+    settled = sum(1 for c in claims if c.get("status") == "Settled")
+    in_progress = sum(1 for c in claims if c.get("status") in ("Assessment", "Investigation", "Assigned"))
+    rejected = sum(1 for c in claims if c.get("status") in ("Rejected", "FNOL"))
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Total Claims", total_claims)
+    c2.metric("Settled", settled, f"{settled/total_claims*100:.0f}%" if total_claims else "")
+    c3.metric("In Progress", in_progress)
+    c4.metric("Total Reserves (KES)", f"{total_reserve:,.0f}")
+
+    st.divider()
+
+    # Charts from analytics module
+    try:
+        render_analytics(show_refresh=True)
+        st.divider()
+        render_advanced_analytics()
+    except Exception as e:
+        st.warning(f"Analytics charts could not be rendered: {e}")
+        st.info("Charts require the analytics data views to be configured.")
+
+
+# ---------------------------------------------------------------------------
 # Scoring helper
 # ---------------------------------------------------------------------------
 
@@ -596,15 +832,11 @@ def _bid_comparison() -> None:
                 st.warning(f"Override logged: {winner['bid_ref']} (Rank {winner['rank']}) selected over recommendation.")
 
             st.success(
-                f"**Contract Awarded — {winner['provider']}** ({winner['bid_ref']})  
-"
+                f"**Contract Awarded — {winner['provider']}** ({winner['bid_ref']})  \n"
                 f"Unit Price: **KES {winner['unit_price']:,.2f}** · "
                 f"Lead time: **{winner['lead_days']} days** · "
-                f"Warranty: **{winner['warranty']}** · Score: **{winner['composite']}**  
-"
-                f"Order: **{order_ref}** · Payer: **{payer.split(' (')[0]}**  
-"
-                f"Delivery: {delivery_address}  
-"
+                f"Warranty: **{winner['warranty']}** · Score: **{winner['composite']}**  \n"
+                f"Order: **{order_ref}** · Payer: **{payer.split(' (')[0]}**  \n"
+                f"Delivery: {delivery_address}  \n"
                 f"**{len(losers)}** losing provider(s) notified."
             )

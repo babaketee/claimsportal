@@ -175,20 +175,20 @@ def show() -> None:
             "admin": {"Admin Dashboard", "Analytics", "Reports"},
         }
         for role in ROLES_LIST:
-            with st.expander(role.toUpperCase() + " ÃÂÃÂ¢ÃÂÃÂÃÂÃÂ " + PERMS.get(role, new Set()).size + " view(s) allowed", expanded=False):
-                allowed = PERMS.get(role, new Set())
+            allowed = PERMS.get(role, set())
+            with st.expander(f"{role.upper()} — {len(allowed)} view(s) allowed", expanded=False):
                 for view in VIEWS:
                     col1, col2 = st.columns([4, 1])
                     with col1: st.markdown(view)
                     with col2:
-                        granted = allowed.has(view)
+                        granted = view in allowed
                         new_val = st.checkbox("Granted", value=granted, key="perm_" + role + "_" + view)
                         if new_val != granted:
                             if new_val:
                                 allowed.add(view)
                                 st.success("'" + view + "' granted to '" + role + "'")
                             else:
-                                allowed.delete(view)
+                                allowed.discard(view)
                                 st.warning("'" + view + "' revoked from '" + role + "'")
         if st.button("Save Permission Matrix"):
             st.success("Permission matrix saved.")
@@ -241,14 +241,17 @@ def show() -> None:
                 st.warning("This will delete all local SQLite data. Confirmed?")
 
         st.markdown("**App Health**")
+        if core_api and hasattr(core_api, "is_configured") and core_api.is_configured():
+            api_status = "Connected"
+        else:
+            api_status = "Demo mode"
         health = {
-            "Core API": (core_api && typeof core_api.is_configured === 'function' && core_api.is_configured()) ? "Connected" : "Demo mode",
+            "Core API": api_status,
             "Analytics DB": "Not configured",
             "SMS": "Not configured",
             "M-Pesa": "Not configured",
             "Database": "claims_operations.db",
-            "App Version": "2.1.0",
-            "Branch": "railway-migration",
+            "App Version": __import__("os").environ.get("VERSION", "2.1.0"),
         }
         health_df = pd.DataFrame(list(health.items()), columns=["Component", "Status"])
         st.dataframe(health_df, use_container_width=True)

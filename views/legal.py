@@ -20,15 +20,23 @@ LITIGATION_STATUSES = ["none", "pending", "filed", "settled_out_of_court", "dism
 
 
 def render() -> None:
-    st.title("⚖️ Legal Officer Portal")
+    st.markdown("""
+    <div class="da-gradient-header">
+      <h1>⚖️ Legal Officer Portal</h1>
+      <p style="color: rgba(255,255,255,0.90); margin: 4px 0 0; font-size: 0.95rem;">
+        Repudiation defence, litigation, arbitration &amp; legal compliance
+      </p>
+    </div>
+    <div class="da-accent-line"></div>
+    """, unsafe_allow_html=True)
     tabs = st.tabs([
-        "U0001f4c4 Dispute Register",
-        "U0001f514 Repudiation Appeals",
-        "U0001f3db️ Litigation Tracker",
-        "U0001f4ec Demand Letters & OTS",
-        "U0001f501 Recovery & Subrogation",
-        "U0001f4cb IRA Complaints",
-        "U0001f4cc Repudiation Workflow",
+        "📄 Dispute Register",
+        "🔔 Repudiation Appeals",
+        "🏛️ Litigation Tracker",
+        "📬 Demand Letters & OTS",
+        "🔁 Recovery & Subrogation",
+        "📋 IRA Complaints",
+        "📌 Repudiation Workflow",
     ])
     with tabs[0]: _dispute_register()
     with tabs[1]: _repudiation_appeals()
@@ -189,7 +197,7 @@ def _demand_letters_ots() -> None:
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("**U0001f4ec Incoming Demand Letters**")
+        st.markdown("**📬 Incoming Demand Letters**")
         st.caption("Log letters of demand received from claimants or their advocates.")
         letters = [
             {"Ref": "CLM-20250709012345", "From": "Mwangi & Associates (Advocates)", "Amount Demanded (KES)": "900,000", "Received": "2025-07-18", "Response Due": "2025-07-25", "Status": "Pending Response"},
@@ -198,7 +206,7 @@ def _demand_letters_ots() -> None:
         st.dataframe(letters, use_container_width=True)
 
     with col2:
-        st.markdown("**U0001f4ee Offers to Settle (OTS) Issued**")
+        st.markdown("**🔁 Offers to Settle (OTS) Issued**")
         offers = [
             {"Ref": "CLM-20250709012345", "Offer (KES)": "550,000", "Issued": "2025-07-19", "Expiry": "2025-07-26", "Status": "Awaiting Acceptance"},
             {"Ref": "CLM-20250615029988", "Offer (KES)": "95,000",  "Issued": "2025-07-12", "Expiry": "2025-07-19", "Status": "Accepted — Consent Order"},

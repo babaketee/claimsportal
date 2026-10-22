@@ -12,10 +12,10 @@ from datetime import date
 
 # Import core_api when available (railway-migration)
 try:
-    from supabase import core_api
-    _HAS_CORE_API = True
+    from core_api import core_api
 except ImportError:
-    _HAS_CORE_API = False
+    core_api = None
+_HAS_CORE_API = core_api is not None
 
 # ---------------------------------------------------------------------------
 # Sample data  (replace with Delta / core_api queries in production)
@@ -190,7 +190,15 @@ NOTIFICATIONS = [
 # ---------------------------------------------------------------------------
 
 def render() -> None:
-    st.title("🔧 Spare Parts Provider Portal")
+    st.markdown("""
+    <div class="da-gradient-header">
+      <h1>🔧 Spare Parts Provider Portal</h1>
+      <p style="color: rgba(255,255,255,0.90); margin: 4px 0 0; font-size: 0.95rem;">
+        Parts ordering, inventory &amp; claims supply chain management
+      </p>
+    </div>
+    <div class="da-accent-line"></div>
+    """, unsafe_allow_html=True)
 
     unread = sum(1 for n in NOTIFICATIONS if not n["Read"])
     if unread:
@@ -307,19 +315,10 @@ def _submit_bid() -> None:
                 try:
                     core_api.log_communication(
                         channel="rfq_bid",
+                        direction="outbound",
                         claim_ref=rfq_ref,
-                        message={
-                            "bid_ref": bid_ref,
-                            "company_name": company_name,
-                            "brand": brand,
-                            "condition": condition,
-                            "part_number": your_part_no,
-                            "unit_price": unit_price,
-                            "delivery_days": delivery_days,
-                            "warranty": warranty,
-                            "delivery_from": delivery_from,
-                            "notes": notes,
-                        },
+                        summary=f"RFQ Bid submitted: {company_name} ({brand}) — KES {unit_price}/unit, delivery in {delivery_days} days, warranty {warranty} yrs",
+                        created_by=st.session_state.get("user", "spare_parts_provider"),
                     )
                     st.success(
                         f"Bid **{bid_ref}** submitted for **{rfq_ref}** and stored via core_api. "
@@ -647,15 +646,10 @@ def _rfq_bids() -> None:
                         try:
                             core_api.log_communication(
                                 channel="rfq_bid",
+                                direction="outbound",
                                 claim_ref=rfq["claim_ref"],
-                                message={
-                                    "bid_ref":        bid_ref,
-                                    "rfq_id":         rfq["rfq_id"],
-                                    "unit_price":     unit_price,
-                                    "lead_time_days": lead_time,
-                                    "warranty":       warranty,
-                                    "note":           note,
-                                },
+                                summary=f"RFQ Bid {bid_ref} submitted for {rfq['rfq_id']} — KES {unit_price}/unit, {lead_time} days lead, warranty: {warranty} yrs",
+                                created_by=st.session_state.get("user", "spare_parts_provider"),
                             )
                             st.success(
                                 f"✅ Bid **{bid_ref}** submitted for **{rfq['rfq_id']}** "

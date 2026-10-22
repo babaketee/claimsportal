@@ -233,9 +233,17 @@ def _render_timeline(events: list[dict]) -> None:
 # ---------------------------------------------------------------------------
 
 def render() -> None:
-    st.title("Client Portal")
-    tab_fnol, tab_track, tab_docs = st.tabs(
-        ["File a Claim (FNOL)", "Track My Claim", "My Documents"]
+    st.markdown("""
+    <div class="da-gradient-header">
+      <h1>👤 Client Portal</h1>
+      <p style="color: rgba(255,255,255,0.90); margin: 4px 0 0; font-size: 0.95rem;">
+        File claims, track progress, manage documents &amp; get support
+      </p>
+    </div>
+    <div class="da-accent-line"></div>
+    """, unsafe_allow_html=True)
+    tab_fnol, tab_track, tab_docs, tab_upload, tab_support = st.tabs(
+        ["File a Claim (FNOL)", "Track My Claim", "My Documents", "📤 Document Upload", "💬 Support Chat"]
     )
     with tab_fnol:
         _fnol_form()
@@ -243,6 +251,10 @@ def render() -> None:
         _claim_tracker()
     with tab_docs:
         _my_documents()
+    with tab_upload:
+        _document_upload()
+    with tab_support:
+        _support_chat()
 
 
 # ---------------------------------------------------------------------------
@@ -537,6 +549,125 @@ def _my_documents() -> None:
                 for d in docs
             ]
             st.dataframe(display, use_container_width=True, hide_index=True)
-        if st.button("\U0001f504 Refresh Documents", key="docs_refresh_btn"):
+        if st.button("🔄 Refresh Documents", key="docs_refresh_btn"):
             core_api.invalidate_claim_cache(claim_ref_input)
             st.rerun()
+
+
+# ---------------------------------------------------------------------------
+# Document Upload
+# ---------------------------------------------------------------------------
+
+def _document_upload() -> None:
+    """Dedicated document upload form for clients to submit supporting evidence."""
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📤 Upload Supporting Documents")
+    st.caption("Upload documents for any of your claims. Accepted formats: PDF, JPG, PNG (max 10 MB each).")
+    st.markdown('</div><div class="da-accent-line"></div>', unsafe_allow_html=True)
+
+    claim_ref = st.text_input(
+        "Claim Reference",
+        placeholder="e.g. CLM-20250715123456",
+        key="doc_upload_claim_ref",
+    )
+    doc_type = st.selectbox(
+        "Document Type",
+        ["Driver's License", "NTSA Logbook", "Police Abstract", "Police Report",
+         "Scene Photos", "Damage Photos", "Repair Estimate", "Invoice / Receipt",
+         "Medical Report", "Death Certificate", "Other"],
+    )
+    uploaded_files = st.file_uploader(
+        f"Choose {doc_type} file(s)",
+        type=["pdf", "jpg", "jpeg", "png"],
+        accept_multiple_files=True,
+        key="doc_upload_files",
+    )
+    description = st.text_area("Description (optional)", placeholder="Briefly describe this document...")
+
+    if st.button("Upload Documents", type="primary", use_container_width=True, key="doc_upload_btn"):
+        if not claim_ref:
+            st.error("Please enter a claim reference.")
+            return
+        if not uploaded_files:
+            st.error("Please select at least one file to upload.")
+            return
+        with st.spinner(f"Uploading {len(uploaded_files)} file(s)…"):
+            success_count = 0
+            for f in uploaded_files:
+                mime = "application/pdf" if f.name.lower().endswith(".pdf") else "image/jpeg"
+                doc_type_map = {
+                    "Driver's License": "drivers_license",
+                    "NTSA Logbook": "logbook",
+                    "Police Abstract": "police_abstract",
+                    "Police Report": "police_report",
+                    "Scene Photos": "scene_photo",
+                    "Damage Photos": "damage_photo",
+                    "Repair Estimate": "repair_estimate",
+                    "Invoice / Receipt": "invoice",
+                    "Medical Report": "medical_report",
+                    "Death Certificate": "death_certificate",
+                    "Other": "other",
+                }
+                mapped_type = doc_type_map.get(doc_type, "other")
+                result = core_api.post_document(claim_ref, f.name, mime, f.getvalue(), mapped_type)
+                if result is not None:
+                    success_count += 1
+            if success_count == len(uploaded_files):
+                st.success(f"✅ {success_count} document(s) uploaded successfully for claim **{claim_ref}**.")
+                st.balloons()
+            else:
+                st.warning(f"⚠️ Partially uploaded: {success_count}/{len(uploaded_files)} succeeded.")
+
+
+# ---------------------------------------------------------------------------
+# Support Chat
+# ---------------------------------------------------------------------------
+
+def _support_chat() -> None:
+    """Live chat support for clients to communicate with their claims officer."""
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("💬 Support Chat")
+    st.caption("Send a message to your claims officer or the support desk. You will receive a response via email or SMS.")
+    st.markdown('</div><div class="da-accent-line"></div>', unsafe_allow_html=True)
+
+    user_email = st.session_state.get("user", "client@insure.demo")
+
+    # Message history (demo data)
+    st.markdown("**Conversation History**")
+    chat_history = [
+        {"role": "agent", "text": "Hello! Thank you for submitting your claim. Your claims officer S. Karimi will review your documents and respond within 24 hours.", "time": "2025-07-01 10:30"},
+        {"role": "user",  "text": "I wanted to check the status of my claim CLM-20250715123456.", "time": "2025-07-15 14:20"},
+        {"role": "agent", "text": "Your claim is currently with the assessor. Inspection scheduled for 2025-07-18. We'll update you once the report is ready.", "time": "2025-07-15 15:45"},
+    ]
+    for msg in chat_history:
+        if msg["role"] == "agent":
+            st.markdown(f'<div style="padding:8px 12px; background:#f0f7ff; border-radius:8px; margin:4px 0">**Support:** {msg["text"]}  <span style="font-size:0.75em;color:#888">{msg["time"]}</span></div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div style="padding:8px 12px; background:#e8f5e9; border-radius:8px; margin:4px 0; text-align:right">**You:** {msg["text"]}  <span style="font-size:0.75em;color:#888">{msg["time"]}</span></div>', unsafe_allow_html=True)
+
+    st.divider()
+
+    # New message form
+    with st.form("support_chat_form", clear_on_submit=True):
+        subject = st.text_input("Subject", value="Claim status inquiry", key="chat_subject")
+        message = st.text_area("Your Message", height=100, key="chat_message", placeholder="Type your question or message here...")
+        claim_ref_msg = st.text_input("Related Claim Reference (optional)", key="chat_claim_ref", placeholder="e.g. CLM-20250715123456")
+        submitted = st.form_submit_button("Send Message", type="primary", use_container_width=True)
+
+    if submitted:
+        if not message.strip():
+            st.error("Please enter a message before sending.")
+        else:
+            ok = _send_expert_message(
+                claim_ref=claim_ref_msg or "N/A",
+                sent_by=user_email,
+                recipient_type="Client",
+                recipient_name="Claims Support Desk",
+                subject=subject,
+                body=message,
+            )
+            if ok:
+                st.success("✅ Message sent! You will receive a response within 24 hours.")
+                st.rerun()
+            else:
+                st.error("Failed to send message. Please try again or call our support line.")

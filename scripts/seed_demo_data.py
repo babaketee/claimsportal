@@ -21,6 +21,7 @@ from core_api import (
     log_communication,
     add_diary_entry, complete_diary_entry,
     recommend_settlement,
+    create_claim, update_claim_status,
     _get_conn,
 )
 
@@ -53,15 +54,15 @@ def seed():
         ("CLM-2024-008", "Windscreen", "Settled", "2024-08-19", 18500, "KJ 505H", "garage", "Cracked windscreen after highway stone chip"),
         ("CLM-2024-009", "Theft", "Rejected", "2024-09-05", 0, "KK 606J", "assessor", "Claimed theft of stereo — no police abstract submitted"),
         ("CLM-2024-010", "Third Party Property", "Approved", "2024-10-12", 275000, "KL 707K", "assessor", "Collision with shop front on Ngong Road — third party claim validated"),
-        ("CLM-2025-001", "Motor Bumper", "FNOL", "2025-01-08", 0, "KM 808L", null, "Rear bumper damaged in Kilimani mall parking"),
+        ("CLM-2025-001", "Motor Bumper", "FNOL", "2025-01-08", 0, "KM 808L", None, "Rear bumper damaged in Kilimani mall parking"),
         ("CLM-2025-002", "Windscreen", "Assessment", "2025-01-25", 0, "KN 909M", "assessor", "Full windscreen replacement needed after highway incident"),
         ("CLM-2025-003", "Fire Damage", "Investigation", "2025-02-10", 0, "KP 101N", "assessor", "Vehicle arson suspected, Kileleshwa — police OB 234/10/02"),
-        ("CLM-2025-004", "Theft", "Rejected", "2025-03-04", 0, "KR 202R", null, "Claimed theft of spare tyre — policy exclusion for personal belongings"),
+        ("CLM-2025-004", "Theft", "Rejected", "2025-03-04", 0, "KR 202R", None, "Claimed theft of spare tyre — policy exclusion for personal belongings"),
         ("CLM-2025-005", "Third Party Bodily Harm", "Approved", "2025-03-20", 680000, "KS 303S", "investigator", "Pedestrian knocked down at Embakasi — grievous harm confirmed"),
         ("CLM-2025-006", "Flood Damage", "Settled", "2025-04-11", 95000, "KT 404T", "garage", "Water ingress through sunroof during Nairobi floods"),
         ("CLM-2025-007", "Motor Bumper", "Assessment", "2025-05-02", 0, "KU 505U", "assessor", "Front bumper replaced after Pangani incident"),
         ("CLM-2025-008", "Windscreen", "Settled", "2025-05-28", 42000, "KV 606V", "garage", "Windscreen + wiper motor replacement"),
-        ("CLM-2025-009", "Theft", "Rejected", "2025-06-15", 0, "KW 707W", null, "Vehicle claimed stolen — GPS shows vehicle still at registered address"),
+        ("CLM-2025-009", "Theft", "Rejected", "2025-06-15", 0, "KW 707W", None, "Vehicle claimed stolen — GPS shows vehicle still at registered address"),
         ("CLM-2025-010", "Third Party Property", "Investigation", "2025-07-01", 0, "KX 808X", "investigator", "Collision at Sagana junction — liability disputed"),
         ("CLM-2025-011", "Motor Bumper", "Approved", "2025-07-10", 55000, "KY 909Y", "garage", "Hit parked car in Kisumu CBD"),
         ("CLM-2025-012", "Fire Damage", "Assessment", "2025-07-18", 0, "KZ 101Z", "assessor", "Electrical fire shorted dashboard, Ruiru"),
@@ -100,7 +101,36 @@ def seed():
 
     for claim_data, category in all_claims:
         (claim_ref, claim_type, status, date, amount, *rest) = claim_data
-        
+
+        # Determine vehicle_reg or insured_name from rest
+        if category == "Motor":
+            vehicle_reg = rest[0] if rest else ""
+            description = rest[-1] if rest else ""
+        else:
+            insured_name = rest[0] if rest else ""
+            vehicle_reg = ""
+            description = rest[-1] if rest else ""
+
+        # Create the claim record
+        create_claim(
+            claim_ref=claim_ref,
+            vehicle_reg=vehicle_reg,
+            incident_date=date,
+            incident_type=claim_type,
+            description=description,
+            submitted_by=MOTO_OWNER,
+            estimated_amount=amount,
+        )
+
+        # Record the initial status (defaults to Submitted → set to intended)
+        if status != "Submitted":
+            update_claim_status(
+                claim_ref=claim_ref,
+                to_status=status,
+                changed_by="officer@insure.demo",
+                note=f"Initial status set to {status}",
+            )
+
         # Set initial reserve (50% of claim amount for approved ones)
         if amount > 0 and status not in ("Rejected", "FNOL"):
             reserve_amount = min(amount * 0.5, 500000)

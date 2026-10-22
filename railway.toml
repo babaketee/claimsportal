@@ -4,7 +4,7 @@
   runtime = "python"
 
 [build]
-  command = "pip install -r claims-client-portal/requirements.txt"
+  command = "pip install -r requirements.txt"
   builder = "python"
 
 [deploy]

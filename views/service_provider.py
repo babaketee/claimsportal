@@ -18,7 +18,15 @@ ROLE_LABELS = {
 
 
 def render(role: str) -> None:
-    st.title(f"🔧 Service Provider Portal — {ROLE_LABELS.get(role, role)}")
+    st.markdown(f"""
+    <div class="da-gradient-header">
+      <h1>🔧 Service Provider Portal — {ROLE_LABELS.get(role, role)}</h1>
+      <p style="color: rgba(255,255,255,0.90); margin: 4px 0 0; font-size: 0.95rem;">
+        Claims assessment, estimate approval, payment &amp; vendor coordination
+      </p>
+    </div>
+    <div class="da-accent-line"></div>
+    """, unsafe_allow_html=True)
 
     if role == "assessor":
         tabs = st.tabs(["📂 Assigned Claims", "📝 Assessment Report", "✅ Approve Estimate", "💳 Payment Status"])
@@ -143,14 +151,17 @@ def _submit_quote(claim_ref: str, provider_email: str) -> None:
                         channel="quote",
                         direction="outbound",
                         summary=f"Quote submitted — KES {net:,.0f} net (labour={labour}, parts={parts}, wht={wht:,.0f})",
-                        actor=provider_email,
+                        created_by=provider_email,
                     )
                     # Register quote document
                     core_api.register_document(
                         claim_ref=claim_ref,
                         doc_type="quote",
-                        description=f"Quote — KES {net:,.0f} net | labour={labour} parts={parts} wht={wht:,.0f} | {note}",
-                        actor=provider_email,
+                        filename=f"quote_{claim_ref}.pdf",
+                        file_size=0,
+                        mime_type="application/pdf",
+                        uploaded_by=provider_email,
+                        note=f"Quote — KES {net:,.0f} net | labour={labour} parts={parts} wht={wht:,.0f} | {note}",
                     )
                     st.success(f"✅ Quote submitted — KES {net:,.0f} net for {claim_ref}")
                 except Exception as e:
@@ -200,7 +211,7 @@ def _submit_assessment_report() -> None:
                         channel="assessment",
                         direction="outbound",
                         summary=f"Assessment report submitted — condition: {vehicle_condition}, repair estimate: KES {repair_estimate:,.2f}",
-                        actor=actor,
+                        created_by=actor,
                     )
                     st.success(f"Assessment report submitted for claim **{claim_ref}**.")
                 except Exception as e:
@@ -237,13 +248,13 @@ def _approve_estimate() -> None:
                         channel="decision",
                         direction="outbound",
                         summary=f"Estimate decision: {decision} — garage: {garage_name}, amount: KES {estimate_amount:,.2f}, comments: {comments}",
-                        actor=actor,
+                        created_by=actor,
                     )
                     core_api.update_claim_status(
                         claim_ref,
                         f"Estimate {decision}",
                         note=f"Garage {garage_name}: {decision} — KES {estimate_amount:,.2f}",
-                        actor=actor,
+                        changed_by=actor,
                     )
                     core_api.invalidate_claim_cache(claim_ref)
                     st.success(f"Decision **{decision}** recorded for claim {claim_ref}. Garage notified.")
@@ -289,7 +300,7 @@ def _submit_estimate() -> None:
                         channel="estimate",
                         direction="outbound",
                         summary=f"Repair estimate submitted — labour: KES {labour_cost:,.2f}, parts: KES {parts_cost:,.2f}, total: KES {total_estimate:,.2f}",
-                        actor=actor,
+                        created_by=actor,
                     )
                     st.success(
                         f"Estimate submitted for **{claim_ref}**. Awaiting assessor approval (SLA: 48 hours)."
@@ -332,13 +343,13 @@ def _request_supplementary() -> None:
                         channel="supplementary",
                         direction="outbound",
                         summary=f"Supplementary request — original: KES {approved_estimate:,.2f}, additional: KES {additional_amount:,.2f}, reason: {reason}",
-                        actor=actor,
+                        created_by=actor,
                     )
                     core_api.update_claim_status(
                         claim_ref,
                         "Supplementary Requested",
                         note=f"Additional amount: KES {additional_amount:,.2f} — {reason}",
-                        actor=actor,
+                        changed_by=actor,
                     )
                     core_api.invalidate_claim_cache(claim_ref)
                     st.success(f"Supplementary request submitted for **{claim_ref}**. Under review.")
@@ -413,7 +424,7 @@ def _submit_invoice() -> None:
                 core_api.update_claim_status(
                     claim_ref, "Invoice Submitted",
                     note=f"Invoice {invoice_number} KES {invoice_amount:,.2f}",
-                    actor=actor,
+                    changed_by=actor,
                 )
                 core_api.invalidate_claim_cache(claim_ref)
                 msg = f"Invoice **{invoice_number}** for claim **{claim_ref}** submitted. Routed to accounts payable."
@@ -630,13 +641,13 @@ def _submit_investigation_report() -> None:
                         channel="investigation",
                         direction="outbound",
                         summary=f"Investigation report submitted — recommendation: {recommendation}",
-                        actor=actor,
+                        created_by=actor,
                     )
                     core_api.update_claim_status(
                         claim_ref,
                         "Investigation Submitted",
                         note=f"Recommendation: {recommendation} — findings: {findings[:200]}",
-                        actor=actor,
+                        changed_by=actor,
                     )
                     core_api.invalidate_claim_cache(claim_ref)
                     st.success(f"Investigation report submitted for **{claim_ref}**. Claims handler notified.")

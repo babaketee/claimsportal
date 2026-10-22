@@ -11,15 +11,24 @@ ROLE_LABELS = {"finance":"Finance / Accounts Payable","finance_head":"Finance He
 
 
 def render(role: str) -> None:
-    st.title(f"💰 {ROLE_LABELS.get(role, 'Finance Portal')}")
+    st.markdown(f"""
+    <div class="da-gradient-header">
+      <h1>💰 {ROLE_LABELS.get(role, 'Finance Portal')}</h1>
+      <p style="color: rgba(255,255,255,0.90); margin: 4px 0 0; font-size: 0.95rem;">
+        Reserve analysis, approvals, payment processing &amp; reporting
+      </p>
+    </div>
+    <div class="da-accent-line"></div>
+    """, unsafe_allow_html=True)
     if role == "finance_head":
-        tabs = st.tabs(["📊 Dashboard","✅ High-Value Approvals","📥 Payment Queue","💸 Process Payment","🔄 Payment Status","📑 Reports"])
+        tabs = st.tabs(["📊 Dashboard","✅ High-Value Approvals","📥 Payment Queue","💸 Process Payment","🔄 Payment Status","📑 Reports","💳 Reserve Analysis"])
         with tabs[0]: _financial_dashboard()
         with tabs[1]: _high_value_approvals()
         with tabs[2]: _payment_queue()
         with tabs[3]: _process_payment()
         with tabs[4]: _update_payment_status()
         with tabs[5]: _financial_reports()
+        with tabs[6]: _reserve_analysis()
     else:
         tabs = st.tabs(["📥 Payment Queue","💸 Process Payment","🔄 Update Status","📊 Reconciliation"])
         with tabs[0]: _payment_queue()
@@ -182,6 +191,73 @@ def _reconciliation() -> None:
         {"Ref":"CLM-20250704009876","Payee":"Faith Achieng",      "Amount (KES)":"45,000", "Type":"Settlement","Status":"Reconciled","Bank Ref":"ABB-20250716-0089"},
     ], use_container_width=True)
     st.warning("1 unreconciled item — EFT return for Nairobi Garage Ltd. Re-process or return to Claims Officer.")
+
+
+# ---------------------------------------------------------------------------
+# Reserve Analysis
+# ---------------------------------------------------------------------------
+
+def _reserve_analysis() -> None:
+    """Analyse reserve adequacy, IBNR, and reserve trends across claim types."""
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("💳 Reserve Analysis — Adequacy & IBNR")
+    st.caption("Monitor total reserves, individual case reserves (ICR), and Incurred But Not Reported (IBNR) provisions per Kenya NAICOM solvency requirements.")
+    st.markdown('</div><div class="da-accent-line"></div>', unsafe_allow_html=True)
+
+    # Reserve adequacy KPIs
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Total Reserves (KES M)", "48.6", "+2.1 MoM")
+    c2.metric("IBNR Provision (KES M)", "12.7", "+0.8 MoM")
+    c3.metric("Reserve Adequacy", "94%", "+2%")
+    c4.metric("High-Value Claims (>KES 200k)", "12", "+3")
+    st.divider()
+
+    # Reserve adequacy by claim type
+    st.markdown("**Reserve Adequacy by Claim Type**")
+    adequacy_data = [
+        {"Claim Type": "Motor Private",     "Reserve (KES M)": 24.1, "Paid (KES M)": 16.8, "IBNR (KES M)": 7.3, "Adequacy": "92%"},
+        {"Claim Type": "Motor Commercial",  "Reserve (KES M)":  9.4, "Paid (KES M)":  7.1, "IBNR (KES M)": 2.3, "Adequacy": "96%"},
+        {"Claim Type": "Fire",              "Reserve (KES M)":  8.2, "Paid (KES M)":  5.4, "IBNR (KES M)": 2.8, "Adequacy": "89%"},
+        {"Claim Type": "Theft",             "Reserve (KES M)":  4.1, "Paid (KES M)":  2.9, "IBNR (KES M)": 1.2, "Adequacy": "95%"},
+        {"Claim Type": "Windscreen",        "Reserve (KES M)":  2.8, "Paid (KES M)":  2.2, "IBNR (KES M)": 0.6, "Adequacy": "98%"},
+    ]
+    st.dataframe(adequacy_data, use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    # Reserve movement chart
+    st.markdown("**Reserve Movement (Last 6 Months)**")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.bar_chart({
+            "Jan": 38.4, "Feb": 40.1, "Mar": 42.8,
+            "Apr": 44.2, "May": 46.5, "Jun": 48.6
+        })
+    with col2:
+        st.markdown("__Reserve Adjustments__")
+        st.text("• +KES 2.1M — New claim CLM-20250712055431 (Fire, KES 850k)")
+        st.text("• +KES 1.8M — IBNR uplift for Motor Commercial")
+        st.text("• -KES 0.9M — Release on settled theft claims")
+        st.text("• +KES 1.7M — Investigation escalation reserve")
+
+    st.divider()
+
+    # Individual large reserves
+    st.markdown("**Large Reserve Reviews (≥ KES 500k)**")
+    large_reserves = [
+        {"Ref": "CLM-20250712055431", "Client": "Peter Ochieng",  "Type": "Fire",      "Reserve (KES)": "850,000",   "ICR (KES)": "850,000",   "IBNR (KES)": "0",      "Last Review": "2025-07-16", "Next Review": "2025-08-16"},
+        {"Ref": "CLM-20250705088812", "Client": "Mercy Holdings", "Type": "Commercial", "Reserve (KES)": "3,200,000", "ICR (KES)": "2,800,000", "IBNR (KES)": "400,000", "Last Review": "2025-07-10", "Next Review": "2025-08-10"},
+        {"Ref": "CLM-20250709012345", "Client": "David Otieno",   "Type": "Motor Acc", "Reserve (KES)": "620,000",  "ICR (KES)": "620,000",   "IBNR (KES)": "0",      "Last Review": "2025-07-09", "Next Review": "2025-08-09"},
+    ]
+    st.dataframe(large_reserves, use_container_width=True, hide_index=True)
+
+    with st.expander("⚙️ Reserve Configuration"):
+        st.json({
+            "NAICOM Solvency II threshold": "Reserves must cover 95% of ultimate losses",
+            "IBNR loading factors": "Motor: 15%, Fire: 20%, Theft: 10%, Other: 12%",
+            "Review frequency": "Monthly for claims > KES 500k, quarterly for others",
+            "Reinsurance recovery": "Automatically reduces reserves once confirmed",
+        })
 
 
 def _financial_dashboard() -> None:

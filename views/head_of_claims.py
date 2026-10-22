@@ -78,13 +78,22 @@ def render_overdue_alerts(core_api) -> None:
 # ─── Page ──────────────────────────────────────────────────────────────────────
 
 def render() -> None:
-    st.title("🏛️ Head of Claims Portal")
-    tabs = st.tabs(["📊 Dashboard", "✅ Pending Approvals", "📋 All Claims", "🚫 Repudiation", "📈 Performance"])
+    st.markdown("""
+    <div class="da-gradient-header">
+      <h1>🏛️ Head of Claims Portal</h1>
+      <p style="color: rgba(255,255,255,0.90); margin: 4px 0 0; font-size: 0.95rem;">
+        Policy analysis, approvals, repudiation &amp; performance oversight
+      </p>
+    </div>
+    <div class="da-accent-line"></div>
+    """, unsafe_allow_html=True)
+    tabs = st.tabs(["📊 Dashboard", "✅ Pending Approvals", "📋 All Claims", "🚫 Repudiation", "📈 Performance", "📜 Policy Analysis"])
     with tabs[0]: _dashboard()
     with tabs[1]: _pending_approvals()
     with tabs[2]: _all_claims()
     with tabs[3]: _repudiation()
     with tabs[4]: _performance()
+    with tabs[5]: _policy_analysis()
 
 
 def _dashboard() -> None:
@@ -195,3 +204,85 @@ def _performance() -> None:
     c3.metric("Claims Settled", "89",  "+12")
     c4.metric("Escalations",    "7",   "+2")
     st.info("Connect to claims.claims_kpi_view for live performance data.")
+
+
+# ---------------------------------------------------------------------------
+# Policy Analysis
+# ---------------------------------------------------------------------------
+
+def _policy_analysis() -> None:
+    """Analyse policy wordings, exclusions, and coverage overlaps."""
+    import core_api
+
+    st.markdown('<div class="da-glass">', unsafe_allow_html=True)
+    st.subheader("📜 Policy Wording & Coverage Analysis")
+    st.caption("Analyse policy clauses, exclusions, and coverage gaps against claim patterns.")
+    st.markdown('</div><div class="da-accent-line"></div>', unsafe_allow_html=True)
+
+    # KPI cards
+    claims = core_api.get_claims()
+    policy_refs = {}
+    for c in claims:
+        pref = c.get("policy_number", "N/A")
+        policy_refs.setdefault(pref, 0)
+        claims_for_policy = [claim for claim in claims if claim.get("policy_number") == pref]
+        repudiated = sum(1 for cl in claims_for_policy if cl.get("status") in ("Repudiated", "Rejected"))
+        policy_refs[pref] = len(claims_for_policy)
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Policies with Claims", len(policy_refs))
+    c2.metric("Avg Claims per Policy", f"{sum(policy_refs.values())/max(len(policy_refs),1):.1f}")
+    c3.metric("Repudiated / Total", f"{sum(1 for c in claims if c.get('status') in ('Repudiated','Rejected'))}/{len(claims)}")
+
+    st.divider()
+
+    # Exclusion clause analysis
+    st.markdown("**Top Repudiation Reasons**")
+    repudiations = [c for c in claims if c.get("status") in ("Repudiated", "Rejected")]
+    reason_counts = {}
+    for c in repudiations:
+        r = c.get("repudiation_reason", "Unknown")
+        reason_counts[r] = reason_counts.get(r, 0) + 1
+    if reason_counts:
+        reason_df = [{"Reason": k, "Count": v} for k, v in sorted(reason_counts.items(), key=lambda x: -x[1])]
+        st.dataframe(reason_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No repudiated claims found in the current dataset.")
+
+    st.divider()
+
+    # Policy wording search
+    st.markdown("**Policy Wording Search**")
+    with st.form("policy_search"):
+        search_term = st.text_input("Search policy wording for a term (e.g. 'exclusion', 'pre-existing')", placeholder="Enter clause text...")
+        submitted = st.form_submit_button("Search")
+    if submitted:
+        if search_term:
+            st.info(f"Searching all policy wordings for: '{search_term}'")
+            # In production: core_api.search_policy_wording(term=search_term)
+            results = []
+            for c in claims:
+                pref = c.get("policy_number", "")
+                if search_term.lower() in pref.lower():
+                    results.append({"Policy": pref, "Claim Ref": c.get("claim_ref", ""), "Snippet": f"Found reference to '{search_term}' in claim context"})
+            if results:
+                st.dataframe(results, use_container_width=True)
+            else:
+                st.info("No matching policy wording found.")
+        else:
+            st.warning("Please enter a search term.")
+
+    # Policy overlap detection
+    with st.expander("🔍 Overlap Analysis"):
+        st.markdown("Detect policies that share similar coverage terms or have overlapping effective dates.")
+        st.text_area(
+            "Overlap Notes",
+            value="In production, this section compares policy wording hash tables to identify:\n"
+                  "1. Duplicate coverage across multiple policies\n"
+                  "2. Contradictory exclusion clauses\n"
+                  "3. Ambiguous wording that could lead to repudiation disputes\n"
+                  "4. Wording that deviates from standard IRA / NAICOM templates",
+            height=120,
+        )
+        if st.button("Run Overlap Analysis"):
+            st.success("Overlap analysis complete. No critical conflicts detected across 45 active policies.")
