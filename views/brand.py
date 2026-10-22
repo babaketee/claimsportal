@@ -317,6 +317,40 @@ section[data-testid="stSidebar"] .stButton > button {{
 section[data-testid="stSidebar"] .stButton > button:hover {{
   background-color: #c41e24 !important;
   box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  transform: translateY(-1px);
+}}
+
+/* ---- Enhanced sidebar nav — glassmorphism + neon hover ---- */
+section[data-testid="stSidebar"] .stRadio [data-baseweb="radio"] {{
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+  border-radius: 12px;
+  padding: 8px;
+  margin: 4px 0;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}}
+section[data-testid="stSidebar"] .stRadio [data-baseweb="radio"] label {{
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: 6px;
+  padding: 6px 12px !important;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}}
+section[data-testid="stSidebar"] .stRadio [data-baseweb="radio"] label:hover {{
+  color: var(--da-white) !important;
+  background: rgba(235, 34, 41, 0.20) !important;
+  transform: translateX(4px) !important;
+  box-shadow: 0 0 10px rgba(235, 34, 41, 0.30) !important;
+}}
+section[data-testid="stSidebar"] .stRadio [data-baseweb="radio"] input[type="radio"]:checked + label {{
+  background: rgba(235, 34, 41, 0.35) !important;
+  box-shadow: 0 0 12px rgba(235, 34, 41, 0.50) !important;
+  color: var(--da-white) !important;
+}}
+
+/* ---- Sidebar accent border ---- */
+section[data-testid="stSidebar"] {{
+  border-right: 3px solid var(--da-green);
 }}
 
 /* ---- Primary action buttons — Uhuru Red ---- */
@@ -586,26 +620,143 @@ hr {{
   text-align: center;
   padding: 20px 0 4px 0;
 }}
+
+/* ---- Login page gradient background ---- */
+[data-testid="stApp"] .main {{
+  background: radial-gradient(circle at 30% 30%, rgba(235, 34, 41, 0.05) 0%, transparent 50%),
+              radial-gradient(circle at 80% 70%, rgba(15, 79, 56, 0.05) 0%, transparent 50%);
+}}
+
+/* ---- Login form glass container ---- */
+.da-login-form {{
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(14px) saturate(180%);
+  -webkit-backdrop-filter: blur(14px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.30);
+  border-radius: 16px;
+  padding: 28px 28px 32px;
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.50);
+  margin: 16px 0;
+}}
+
+/* ---- Login form accent bar ---- */
+.da-login-form::before {{
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, {GREEN}, {RED}, {BLUE});
+  border-radius: 3px 3px 0 0;
+}}
+
+/* ---- Login form fields ---- */
+.da-login-form .stTextInput input {{
+  background: rgba(255, 255, 255, 0.70);
+  border: 1px solid rgba(0, 86, 122, 0.20);
+  border-radius: 8px;
+  transition: all 0.20s ease;
+}}
+.da-login-form .stTextInput input:focus {{
+  background: rgba(255, 255, 255, 0.90);
+  box-shadow: 0 0 0 3px {GREEN_10}, 0 0 12px rgba(15, 79, 56, 0.25);
+  border-color: {GREEN};
+}}
+
+/* ---- Neon login button glow ---- */
+.da-login-form .stButton > button[type="primary"] {{
+  background: linear-gradient(135deg, {RED}, {BLUE});
+  border: none;
+  border-radius: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  transition: all 0.20s ease;
+}}
+.da-login-form .stButton > button[type="primary"]:hover {{
+  transform: translateY(-2px);
+  box-shadow: 0 0 20px rgba(235, 34, 41, 0.40), 0 4px 16px rgba(0, 0, 0, 0.15);
+  filter: brightness(1.1);
+}}
+
+/* ---- Login brand tick ---- */
 .da-login-tick {{
   font-size: 3.5rem;
   color: {RED};
   line-height: 1;
+  filter: drop-shadow(0 0 8px rgba(235, 34, 41, 0.30));
 }}
+
+/* ---- Login brand name with gradient ---- */
 .da-login-name {{
-  font-size: 1.6rem;
+  font-size: 1.8rem;
   font-weight: 900;
-  color: {GREEN};
+  background: linear-gradient(135deg, {GREEN}, {RED});
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   margin-top: 6px;
 }}
+
+/* ---- Login tagline with subtle glow ---- */
 .da-login-tagline {{
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   color: {RED};
   font-weight: 500;
-  margin-top: 2px;
+  margin-top: 4px;
   margin-bottom: 18px;
   font-style: italic;
+  text-shadow: 0 0 4px rgba(235, 34, 41, 0.20);
+}}
+
+/* ---- Enhanced login tagline: neon pill badge ---- */
+.da-login-tagline.da-neon-badge {{
+  display: inline-block;
+  padding: 4px 16px;
+  background: rgba(235, 34, 41, 0.15);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(235, 34, 41, 0.30);
+  border-radius: 20px;
+  box-shadow: 0 0 12px rgba(235, 34, 41, 0.25);
+  animation: da-pulse 3s ease-in-out infinite;
+}}
+
+/* ---- Login page gradient header ---- */
+.da-login-header {{
+  background: linear-gradient(135deg, {GREEN} 0%, {RED} 50%, {BLUE} 100%);
+  padding: 16px 24px;
+  border-radius: 14px;
+  margin-bottom: 16px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.15);
+  text-align: center;
+}}
+.da-login-header h1 {{
+  color: {WHITE} !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.30);
+  font-size: 1.6rem;
+}}
+.da-login-header .da-accent-line {{
+  margin: 12px auto;
+  opacity: 0.7;
+}}
+
+/* ---- Login page full gradient background ---- */
+[data-testid="stApp"] .main {{
+  background: radial-gradient(circle at 30% 30%, rgba(235, 34, 41, 0.06) 0%, transparent 50%),
+              radial-gradient(circle at 80% 70%, rgba(15, 79, 56, 0.06) 0%, transparent 50%);
+}}
+
+/* ---- Login form glass card: neon border on hover ---- */
+.da-login-form {{
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
+}}
+.da-login-form:hover {{
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.50);
+  border-color: rgba(235, 34, 41, 0.40);
 }}
 
 /* ---- Enhanced status badges: focus ring + transition ---- */
@@ -1116,9 +1267,13 @@ def brand_login_header() -> None:
     """Render the branded heading on the login / landing page."""
     st.markdown(
         f"""
-        <div class="da-login-wrap">
-          {_logo_img(variant="color", width_px=250)}
-          <div class="da-login-tagline">You Are Definitely Covered</div>
+        <div class="da-login-header da-glass">
+          <div style="display:flex; align-items:center; justify-content:center; gap:10px;">
+            {_logo_img(variant="color", width_px=200)}
+          </div>
+          <h1 style="margin: 12px 0 4px 0; font-size: 1.8rem;">Definite Assurance</h1>
+          <div class="da-accent-line"></div>
+          <div class="da-login-tagline da-neon-badge">You Are Definitely Covered</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1129,9 +1284,10 @@ def brand_sidebar_header() -> None:
     """Render the sidebar brand block (logo on Aberdare Green background)."""
     st.markdown(
         f"""
-        <div style="padding: 8px 0 4px 0; text-align:center;">
-          <div style="display:inline-block;">{_logo_img(variant="white", width_px=155)}</div>
-          <div style="font-size:0.7rem; color:rgba(255,255,255,0.7); font-style:italic; margin-top:4px;">
+        <div class="da-glass" style="padding: 12px 8px; text-align: center; border-radius: 12px; margin-bottom: 12px;">
+          <div style="display: inline-block;">{_logo_img(variant="white", width_px=155)}</div>
+          <div class="da-accent-line" style="margin: 8px 0; opacity: 0.5;"></div>
+          <div class="da-login-tagline da-neon-badge" style="font-size:0.75rem; padding:3px 12px; margin-top:4px;">
             You Are Definitely Covered
           </div>
         </div>
